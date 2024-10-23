@@ -173,8 +173,14 @@ def genAnalysis(
     TTL_RAIN = TTL_RAIN.rename("TTL_RAIN")
 
     merge_data.append(TTL_RAIN)
+   
+    # LAND = 1, WATER = 2 
+    SST_NOLND = ds["SST"].where(ds["XLAND"] == 2).rename("SST_NOLND")
+    merge_data.append(SST_NOLND)
 
     new_ds = xr.merge(merge_data)
+
+
 
     return new_ds
 

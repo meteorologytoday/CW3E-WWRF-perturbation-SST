@@ -16,9 +16,27 @@ plot_infos = dict(
         wrf_varname = "TSK",
         label = "SST",
         unit = "K",
-        levs = np.linspace(-1, 1, 11) * 5,
+        levs = np.linspace(-1, 1, 11) * 2,
         cmap = cmocean.cm.balance,
     ), 
+
+    SST_NOLND = dict(
+        selector = None,
+        label = "SST",
+        unit = "K",
+        levs = np.linspace(-1, 1, 11) * 2,
+        cmap = cmocean.cm.balance,
+    ), 
+
+
+    PH850 = dict(
+        selector = None,
+        label = "$ \\Phi_{850}$",
+        unit = "$\\mathrm{m}^2 / \\mathrm{s}^2$",
+        levs = np.linspace(-1, 1, 11) * 50,
+        cmap = cmocean.cm.balance,
+    ), 
+
 
     PH500 = dict(
         selector = None,
@@ -291,6 +309,11 @@ if __name__ == "__main__":
 
     ax_flatten = ax.flatten()
 
+    fig.suptitle("Time: %s ~ %s" % (
+        time_beg.strftime("%Y-%m-%d %H:%M:%S"),        
+        time_end.strftime("%Y-%m-%d %H:%M:%S"),        
+    ))
+
     for i, ds in enumerate(data):
         _ds = ds.isel(time=0)
         print("Case : ", i)
@@ -309,10 +332,11 @@ if __name__ == "__main__":
             cmap = plot_info["cmap"] if "cmap" in plot_info else "cmo.balance"
 
             mappable = _ax.contourf(x, y, d, levs, cmap=cmap, extend="both", transform=proj_norm)
-            cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "bottom", thickness=0.03, spacing=0.17)
+            cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
             
-            cb = plt.colorbar(mappable, cax=cax, orientation="horizontal", pad=0.00)
+            cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
             cb.ax.set_xlabel("%s [%s]" % (plot_info["label"], plot_info["unit"]))
+
 
 
     for _ax in ax_flatten:
