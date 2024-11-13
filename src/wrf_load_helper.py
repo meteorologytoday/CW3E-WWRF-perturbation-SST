@@ -191,7 +191,19 @@ def _loadWRFTimeOnly(filename):
     return t
 
 
-def loadWRFDataFromDir(wsm, input_dir, beg_time, end_time=None, prefix=wrfout_prefix, suffix="", time_fmt=wrfout_time_fmt, verbose=False, avg=None, inclusive="left", assign_coords=True):
+def loadWRFDataFromDir(
+    wsm,
+    input_dir,
+    beg_time,
+    end_time=None,
+    prefix=wrfout_prefix,
+    suffix="",
+    time_fmt=wrfout_time_fmt,
+    verbose=False,
+    avg=None,
+    inclusive="left",
+    drop_latlon_time_dependency=False,
+):
     
     if end_time is None:
         inclusive = "both"
@@ -289,6 +301,20 @@ def loadWRFDataFromDir(wsm, input_dir, beg_time, end_time=None, prefix=wrfout_pr
 
 
     has_xlat_xlong = np.all( [ coord_varname in ds.coords for coord_varname in ["XLAT", "XLONG"] ] )
+
+
+    if drop_latlon_time_dependency and has_xlat_xlong:
+
+        ds = ds.reset_coords(names=['XLAT', 'XLONG'])
+        new_lat = ds["XLAT"].isel(time=0, drop=True)
+        new_lon = ds["XLONG"].isel(time=0, drop=True)
+        ds = ds.drop_vars(["XLAT", "XLONG"])
+
+        ds = ds.assign_coords({
+            'XLAT': new_lat,
+            'XLONG': new_lon,
+        })
+        
     print("WRF file has coordinate XLAT and XLONG? ", has_xlat_xlong)
     if avg is not None:
 
@@ -342,15 +368,18 @@ def loadWRFDataFromDir(wsm, input_dir, beg_time, end_time=None, prefix=wrfout_pr
 
 
         if has_xlat_xlong:
-
-            ds = ds.assign_coords(
-                XLAT=( ds.XLAT.dims, ds.XLAT.data), 
-                XLONG=( ds.XLONG.dims, ds.XLONG.data),
-            )
+            ds = fixLostCoord(ds)
 
     return ds
-    
-    
+
+def fixLostCoord(ds):
+     
+    return ds.assign_coords(
+        XLAT=( ds["XLAT"].dims, ds["XLAT"].data), 
+        XLONG=( ds["XLONG"].dims, ds["XLONG"].data),
+    )
+
+
 def loadWRFData(wsm, filename=None):
      
     ds = xr.open_dataset(filename, decode_times=False, engine=engine)

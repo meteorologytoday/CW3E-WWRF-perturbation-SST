@@ -7,30 +7,28 @@ output_fig_dir=$fig_dir/diff
 
 nproc=2
 
-for batchname in fixedSST updatesst; do
+for batchname in method2; do
 
     archive_root=$data_dir/WRF_RUNS/0.16deg/runs_${batchname}
 
-    input_dirs=(
-        $archive_root/PRELIMINARY_EOF1_AMP-0.5/output/wrfout
-        $archive_root/PRELIMINARY_EOF1_AMP-0.3/output/wrfout
-        $archive_root/PRELIMINARY_EOF1_AMP0.3/output/wrfout
-        $archive_root/PRELIMINARY_EOF1_AMP0.5/output/wrfout
-    )
+    for epsilon in -50 50 100 150; do
+    #for epsilon in 50; do
+        epsilon=$(  python3 -c "print('%.2f' % ($epsilon/100) )" )
+        input_dirs="$input_dirs $archive_root/PRELIMINARY_eta1.00_epsilon${epsilon}/output/wrfout"
+        epsilons="$epsilons $epsilon"
+    done
 
     input_dirs_base=(
-        $archive_root/PRELIMINARY_EOF1_AMP0.0/output/wrfout
+        $archive_root/PRELIMINARY_eta1.00_epsilon0.00/output/wrfout
     )
 
     exp_beg_time="2023-01-01T00:00:00"
     wrfout_data_interval=10800
     frames_per_wrfout_file=1
 
-
-
     days_to_avg=1
 
-    for day_beg in $( seq 0 17 ) ; do
+    for day_beg in $( seq 15 -1 0 ) ; do
 
         day_end=$(( $day_beg + $days_to_avg ))
         output_dir=$fig_dir/response_map/$batchname
@@ -48,7 +46,7 @@ for batchname in fixedSST updatesst; do
 
             echo "Produce output: $output"
             python3 ./src/plot_response_map.py               \
-                --input-dirs "${input_dirs[@]}"              \
+                --input-dirs $input_dirs                     \
                 --input-dirs-base "${input_dirs_base[@]}"    \
                 --exp-beg-time $exp_beg_time                 \
                 --wrfout-data-interval $wrfout_data_interval \
@@ -57,9 +55,10 @@ for batchname in fixedSST updatesst; do
                 --time-rng $(( 24 * $day_beg )) $(( 24 * $day_end )) \
                 --output $output \
                 --lat-rng 0 65 \
-                --lon-rng 160 280 \
-                --varnames SST_NOLND PH500 PH850 IVT TTL_RAIN \
+                --lon-rng 160 275 \
+                --varnames SST_NOLND PH500 PH850 TTL_RAIN.FILTER-LP \
                 --no-display & 
+
 
 
             proc_cnt=$(( $proc_cnt + 1))

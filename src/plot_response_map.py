@@ -8,8 +8,51 @@ import datetime
 import os
 import wrf_preprocess
 import cmocean
+import re
+import pprint 
+        
+pp = pprint.PrettyPrinter(indent=4)
+g0 = 9.81
+
+def testIfIn(di, key, default):
+    
+    return di[key] if (key in di) else default
+
+
+from scipy.signal import convolve2d
+def moving_average_2d(data, window_size):
+    """Calculates the 2D moving average of a 2D array."""
+
+    # Create a kernel for the moving average
+    kernel = np.ones((window_size, window_size)) / (window_size ** 2)
+
+    # Use convolve2d to calculate the moving average
+    return convolve2d(data, kernel, mode='same')    
 
 plot_infos = dict(
+
+    PRECIP = dict(
+        selector = None,
+        label = "Precip",
+        factor = 24.0,
+        unit = "$\\mathrm{mm} / \\mathrm{day} $",
+        levs = np.linspace(-1, 1, 11) * 10,
+        cmap = cmocean.cm.balance,
+    
+        levs_ctl = np.arange(0, 20, 0.5),
+        cmap_ctl = cmocean.cm.deep,
+        plot_type_ctl = "contourf", 
+    ), 
+
+
+    IVT = dict(
+        selector = None,
+        wrf_varname = "IVT",
+        label = "IVT",
+        unit = "$\\mathrm{kg} / \\mathrm{m} / \\mathrm{s} $",
+        levs = np.linspace(-1, 1, 11) * 50,
+        cmap = cmocean.cm.balance,
+    ), 
 
     SST = dict(
         selector = None,
@@ -26,24 +69,40 @@ plot_infos = dict(
         unit = "K",
         levs = np.linspace(-1, 1, 11) * 2,
         cmap = cmocean.cm.balance,
+        offset = 273.15,
+        levs_ctl = np.arange(0, 30, 1),
+        cmap_ctl = cmocean.cm.thermal,
+        plot_type_ctl = "contourf", 
     ), 
 
 
     PH850 = dict(
         selector = None,
         label = "$ \\Phi_{850}$",
-        unit = "$\\mathrm{m}^2 / \\mathrm{s}^2$",
-        levs = np.linspace(-1, 1, 11) * 50,
+        unit = "$\\mathrm{m}$",
+        levs = np.linspace(-1, 1, 11) * 5,
         cmap = cmocean.cm.balance,
+        factor = g0**(-1),
+
+        levs_ctl = np.arange(1000, 2500, 25),
+        plot_type_ctl = "contour", 
+        clabel_fmt_ctl = "%d",
+        contour_nolnd_ctl = True, 
     ), 
 
 
     PH500 = dict(
         selector = None,
         label = "$ \\Phi_{500}$",
-        unit = "$\\mathrm{m}^2 / \\mathrm{s}^2$",
-        levs = np.linspace(-1, 1, 11) * 200,
+        unit = "$\\mathrm{m}$",
+        levs = np.linspace(-1, 1, 11) * 20,
         cmap = cmocean.cm.balance,
+        factor = g0**(-1),
+
+        levs_ctl = np.arange(5000, 7000, 50),
+        plot_type_ctl = "contour", 
+        clabel_fmt_ctl = "%d", 
+        contour_nolnd_ctl = True, 
     ), 
 
     TTL_RAIN = dict(
@@ -52,6 +111,11 @@ plot_infos = dict(
         unit = "mm",
         levs = np.linspace(-1, 1, 11) * 50,
         cmap = cmocean.cm.balance,
+        low_pass = 7,
+
+        levs_ctl = np.arange(0, 200, 5),
+        cmap_ctl = cmocean.cm.deep,
+        plot_type_ctl = "contourf", 
     ), 
 
 
@@ -126,9 +190,30 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    print(args)
+    pp.pprint(args)
 
     labels = args.labels
+
+
+    var_infos = []
+
+    pattern = r"(?P<varname>[_a-zA-Z0-9]+)(\.FILTER-(?P<FILTER>[a-zA-Z]+))?"
+    for i, varname_full in enumerate(args.varnames):
+        detail = dict()
+        match = re.search(pattern, varname_full)
+        if match:
+            varname = match.group("varname")
+            detail["FILTER"] = match.group("FILTER")
+
+        var_info = dict(
+            varname = varname,
+            detail  = detail,
+        )
+
+        print("[%d] Parsed info: " % (i+1, ))
+        pp.pprint(var_info)
+
+        var_infos.append(var_info)
 
     if labels is None:
         
@@ -169,7 +254,8 @@ if __name__ == "__main__":
     
     # Loading     
     data = [] 
-
+    data_ctl = None
+    landmask = None
     for i in range(len(args.input_dirs)):
         
         input_dir_base = args.input_dirs_base[i] 
@@ -193,7 +279,9 @@ if __name__ == "__main__":
                 wrf_preprocess.genAnalysis(ds_base, wsm.data_interval),
             ])
 
+            landmask = ds_base["LANDMASK"].isel(time=0)
 
+        #print(list(ds_base.keys()))
 
         print("Loading the %d-th wrf dir: %s" % (i, input_dir,))
         ds = wrf_load_helper.loadWRFDataFromDir(
@@ -215,7 +303,11 @@ if __name__ == "__main__":
         #print(ds)
      
         extracted_data = []
-        for varname in args.varnames:
+        extracted_data_ctl = []
+        for var_info in var_infos:
+            
+            varname = var_info["varname"]
+            
             plot_info = plot_infos[varname]
 
             selector = plot_info["selector"] if "selector" in plot_info else None
@@ -233,9 +325,10 @@ if __name__ == "__main__":
             dvar = da - da_base
             dvar = dvar.rename(varname)
             extracted_data.append(dvar)
+            extracted_data_ctl.append(da_base)
             
         data.append(xr.merge(extracted_data))
-
+        data_ctl = xr.merge(extracted_data_ctl)
 
     # Plot data
     print("Loading Plotting Modules: Matplotlib and Cartopy.")
@@ -270,7 +363,7 @@ if __name__ == "__main__":
     lon_span = lon_rng[1] - lon_rng[0]
     lat_span = lat_rng[1] - lat_rng[0]
     
-    ncol = len(data)
+    ncol = len(data) + 1
     nrow = len(args.varnames)
 
     h = 4.0
@@ -279,10 +372,10 @@ if __name__ == "__main__":
     figsize, gridspec_kw = tool_fig_config.calFigParams(
         w = w_map,
         h = h,
-        wspace = 1.5,
+        wspace = 2.0,
         hspace = 1.0,
         w_left = 1.0,
-        w_right = 1.5,
+        w_right = 2.0,
         h_bottom = 1.5,
         h_top = 1.0,
         ncol = ncol,
@@ -314,13 +407,84 @@ if __name__ == "__main__":
         time_end.strftime("%Y-%m-%d %H:%M:%S"),        
     ))
 
+    # Ctl
+    print("Plotting control case")
+    _ds = data_ctl.isel(time=0)
+
+    for j, var_info in enumerate(var_infos):
+       
+        varname = var_info["varname"]
+         
+        print("Varname : ", varname)
+        _ax = ax[j, 0]
+
+        plot_info = plot_infos[varname] 
+
+        coords = _ds.coords
+        x = coords["XLONG"] % 360
+        y = coords["XLAT"]
+        d = _ds[varname]
+        
+       
+        levs = testIfIn(plot_info, "levs_ctl", 11)
+        plot_type = testIfIn(plot_info, "plot_type_ctl", "contourf") 
+        factor = testIfIn(plot_info, "factor", 1.0)
+        offset = testIfIn(plot_info, "offset", 0.0)
+        print("offset = ", offset)
+        d_factor = factor * (d - offset)
+
+        if "FILTER" in (detail := var_info["detail"]):
+            fltr = detail["FILTER"]
+            if fltr is None:
+                pass # Do nothing
+            elif fltr == "LP":
+                window_size = 7
+                d_factor[:, :] = moving_average_2d(d_factor.to_numpy(), window_size)
+            else:
+                raise Exception("Unknown filter: %s" % (str(fltr),))
+ 
+        if plot_type not in ["contourf", "contour"]:
+            print("Warning: Unknown plot_type %s. Change it to contourf." % (plot_type,))
+            plot_type = "contourf"
+         
+        if plot_type == "contourf":
+            
+            print("Plotting contourf...")
+            cmap = testIfIn(plot_info, "cmap_ctl", "cmo.gnuplot")
+            mappable = _ax.contourf(x, y, d_factor, levs, cmap=cmap, extend="both", transform=proj_norm)
+            cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
+            
+            cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
+            cb.ax.set_ylabel("%s [%s]" % (plot_info["label"], plot_info["unit"]))
+        
+        elif plot_type == "contour":
+
+            print("Plotting contour...")
+            fmt = testIfIn(plot_info, "clabel_fmt_ctl", "%.f")
+            contour_nolnd = testIfIn(plot_info, "contour_nolnd_ctl", False)
+    
+            if contour_nolnd:
+                print("Remove land!")
+                print("Before: ", np.sum(np.isfinite(d_factor.to_numpy())))
+                d_factor = d_factor.where(landmask != 1.00)
+                print("After: ", np.sum(np.isfinite(d_factor.to_numpy())))
+
+
+            cs = _ax.contour(x, y, d_factor, levs, colors="black", transform=proj_norm)
+            clables = plt.clabel(cs, fmt=fmt)
+           
+        
+        _ax.set_title("CTL: %s" % (plot_info["label"],))
+        
+    # Diff
     for i, ds in enumerate(data):
         _ds = ds.isel(time=0)
         print("Case : ", i)
-        for j, varname in enumerate(args.varnames):
+        for j, var_info in enumerate(var_infos):
+            varname = var_info["varname"] 
             print("Varname : ", varname)
 
-            _ax = ax[j, i]
+            _ax = ax[j, i+1]
 
             plot_info = plot_infos[varname] 
 
@@ -330,12 +494,28 @@ if __name__ == "__main__":
             d = _ds[varname]
             levs = plot_info["levs"]
             cmap = plot_info["cmap"] if "cmap" in plot_info else "cmo.balance"
+            
+            factor = plot_info["factor"] if "factor" in plot_info else 1
+            d_factor = d * factor
 
-            mappable = _ax.contourf(x, y, d, levs, cmap=cmap, extend="both", transform=proj_norm)
+            if "FILTER" in (detail := var_info["detail"]):
+                fltr = detail["FILTER"]
+                if fltr is None:
+                    pass # Do nothing
+                elif fltr == "LP":
+                    window_size = 5
+                    d_factor[:, :] = moving_average_2d(d_factor.to_numpy(), window_size)
+                else:
+                    raise Exception("Unknown filter: %s" % (str(fltr),))
+     
+
+            mappable = _ax.contourf(x, y, d_factor, levs, cmap=cmap, extend="both", transform=proj_norm)
             cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
             
             cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
-            cb.ax.set_xlabel("%s [%s]" % (plot_info["label"], plot_info["unit"]))
+            cb.ax.set_ylabel("%s [%s]" % (plot_info["label"], plot_info["unit"]))
+        
+            _ax.set_title("ANOM: %s" % (plot_info["label"],))
 
 
 
