@@ -202,8 +202,11 @@ def loadWRFDataFromDir(
     verbose=False,
     avg=None,
     inclusive="left",
-    drop_latlon_time_dependency=False,
+    drop_latlon_time_dependency=True,
 ):
+
+    if drop_latlon_time_dependency:
+        print("Warning: `drop_latlon_time_dependency` is set.")
     
     if end_time is None:
         inclusive = "both"
@@ -305,22 +308,34 @@ def loadWRFDataFromDir(
 
     if drop_latlon_time_dependency and has_xlat_xlong:
 
-        ds = ds.reset_coords(names=['XLAT', 'XLONG'])
-        new_lat = ds["XLAT"].isel(time=0, drop=True)
-        new_lon = ds["XLONG"].isel(time=0, drop=True)
-        ds = ds.drop_vars(["XLAT", "XLONG"])
+        print("Dropping time dependency of XLAT and XLONG")
 
-        ds = ds.assign_coords({
-            'XLAT': new_lat,
-            'XLONG': new_lon,
-        })
-        
+        test_coordnames = ['XLAT', 'XLONG', 'XLAT_U', 'XLAT_V', "XLONG_U", "XLONG_V"]
+        coordnames = []
+
+       
+        # Need to detect if coordname is in the dataset.
+        # If ds does not have this coordname, reset_coords will fail 
+        for coordname in test_coordnames:
+            if coordname in ds.coords:
+                coordnames.append(coordname)
+
+        ds = ds.reset_coords(names=coordnames)
+
+        newly_assign_coords = {
+            coordname : ds[coordname].isel(time=0, drop=True)
+            for coordname in coordnames
+        }
+        ds = ds.drop_vars(coordnames)
+        ds = ds.assign_coords(newly_assign_coords)
+
+            
     print("WRF file has coordinate XLAT and XLONG? ", has_xlat_xlong)
     if avg is not None:
 
         # Unset XLAT and XLONG as coordinate
         # For some reason they disappeared after taking the time mean
-        if has_xlat_xlong:
+        if has_xlat_xlong and (not drop_latlon_time_dependency):
             ds = ds.reset_coords(names=['XLAT', 'XLONG'])
         
         avg_all = avg == "ALL"
@@ -367,18 +382,24 @@ def loadWRFDataFromDir(
             raise Exception("If avg is not None or string 'ALL', it has to be a pandas.Timedelta object. Now type(avg) = `%s`" % str(type(avg),) )
 
 
-        if has_xlat_xlong:
+        if has_xlat_xlong and (not drop_latlon_time_dependency):
             ds = fixLostCoord(ds)
 
     return ds
 
 def fixLostCoord(ds):
-     
-    return ds.assign_coords(
+
+    print("##### Before Fix lost coord")
+    print(ds)
+
+
+    print("##### Fix lost coord")
+    fixed_ds = ds.assign_coords(
         XLAT=( ds["XLAT"].dims, ds["XLAT"].data), 
         XLONG=( ds["XLONG"].dims, ds["XLONG"].data),
     )
 
+    return fixed_ds
 
 def loadWRFData(wsm, filename=None):
      

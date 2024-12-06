@@ -217,8 +217,8 @@ def genAnalysis(
 
         PRECIP = ( TTL_RAIN - TTL_RAIN.shift(time=1) ) / (data_interval.total_seconds() / 3600.0) # mm / hr
         #print("PRECIP BEFORE: ", PRECIP)
-        #PRECIP = PRECIP.shift(time=-1).rename(time="time_mid").isel(time_mid=slice(0, -1)).drop_vars("XTIME").rename("PRECIP") 
-        PRECIP = PRECIP.shift(time=-1).rename(time="time_mid").isel(time_mid=slice(0, -1)).rename("PRECIP") 
+        PRECIP = PRECIP.shift(time=-1).rename(time="time_mid").isel(time_mid=slice(0, -1)).drop_vars("XTIME").rename("PRECIP") 
+        #PRECIP = PRECIP.shift(time=-1).rename(time="time_mid").isel(time_mid=slice(0, -1)).rename("PRECIP") 
         merge_data.append(PRECIP)
 
         #print("PRECIP: ", PRECIP)

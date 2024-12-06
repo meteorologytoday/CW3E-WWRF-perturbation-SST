@@ -272,6 +272,7 @@ if __name__ == "__main__":
                 avg="ALL",
                 verbose=False,
                 inclusive="left",
+                drop_latlon_time_dependency = True,
             )
 
             ds_base = xr.merge([
@@ -293,15 +294,14 @@ if __name__ == "__main__":
             avg="ALL",
             verbose=False,
             inclusive="left",
+            drop_latlon_time_dependency = True,
         )
-            
+        
         ds = xr.merge([
             ds,
             wrf_preprocess.genAnalysis(ds, wsm.data_interval),
         ])
-            
-        #print(ds)
-     
+ 
         extracted_data = []
         extracted_data_ctl = []
         for var_info in var_infos:
@@ -313,9 +313,11 @@ if __name__ == "__main__":
             selector = plot_info["selector"] if "selector" in plot_info else None
             wrf_varname = plot_info["wrf_varname"] if "wrf_varname" in plot_info else varname
 
+            # The coordinate is not attached to 
             da_base = ds_base[wrf_varname]
             da = ds[wrf_varname]
-
+            
+            _coords = ds.coords
 
             if selector is not None:
                 da_base = da_base.isel(**selector)
@@ -324,12 +326,14 @@ if __name__ == "__main__":
              
             dvar = da - da_base
             dvar = dvar.rename(varname)
+
             extracted_data.append(dvar)
             extracted_data_ctl.append(da_base)
-            
-        data.append(xr.merge(extracted_data))
+        
+        merged_extracted_data = xr.merge(extracted_data)
+        data.append(merged_extracted_data)
         data_ctl = xr.merge(extracted_data_ctl)
-
+ 
     # Plot data
     print("Loading Plotting Modules: Matplotlib and Cartopy.")
     import matplotlib as mpl
@@ -513,7 +517,7 @@ if __name__ == "__main__":
             cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
             
             cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
-            cb.ax.set_ylabel("%s [%s]" % (plot_info["label"], plot_info["unit"]))
+            cb.ax.set_ylabel("$\\Delta$%s [%s]" % (plot_info["label"], plot_info["unit"]))
         
             _ax.set_title("ANOM: %s" % (plot_info["label"],))
 

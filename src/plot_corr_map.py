@@ -38,6 +38,7 @@ if __name__ == "__main__":
     parser.add_argument('--varnames', type=str, nargs="+", help="Varnames to do the analysis.", required=True)
     parser.add_argument('--lat-rng', type=float, nargs=2, help="Latitude range for plotting", default=[-90.0, 90.0])
     parser.add_argument('--lon-rng', type=float, nargs=2, help="Latitude range for plotting", default=[0.0, 360.0])
+    parser.add_argument('--sig-threshold', type=float, default=np.nan)
 
     args = parser.parse_args()
 
@@ -136,7 +137,26 @@ if __name__ == "__main__":
         
         cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
         cb.ax.set_ylabel("Correlation")
-        
+       
+        # Dot the significant data
+        if not np.isnan(args.sig_threshold):
+            print("Significant threshold is given: %.2f" % (args.sig_threshold,))            
+            # Plot the hatch to denote significant data
+            _dot = np.zeros_like(d)
+            _label_idx =  (np.abs(d) >= args.sig_threshold)
+
+            _dot[ _label_idx                 ] = 0.75
+            _dot[ np.logical_not(_label_idx) ] = 0.25
+
+            cs = _ax.contourf(x, y, _dot, colors='none', levels=[0, 0.5, 1], hatches=[None, ".."], transform=proj_norm)
+
+            # Remove the contour lines for hatches 
+            for _, collection in enumerate(cs.collections):
+                collection.set_edgecolor((.2, .2, .2))
+                collection.set_linewidth(0.)
+
+
+ 
         _ax.set_title("(%s) %s" % ("abcdefghijklmn"[j], varname, ))
    
     

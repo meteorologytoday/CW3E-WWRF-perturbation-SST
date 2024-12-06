@@ -3,23 +3,23 @@
 source 00_setup.sh
 source 98_trapkill.sh
     
-nproc=5
+nproc=1
 
-input_dir=gendata/corr_remote/method2/
+input_dir=gendata/corr_remote/$batchname
 
-input_fmt="$input_dir/scatter_OPENOCN_33.0N-37.0N_142.0W-138.0W_day%02d-%02d.nc"
+input_fmt="$input_dir/scatter_OPENOCN_33.0N-37.0N_142.0W-138.0W_hours%03d-%03d.nc"
 
-days_to_avg=1
+hours_to_avg=6
 
-for day_beg in $( seq 17 -1 0 ) ; do
+for hour_beg in $( seq $(( 15 * 24 )) -6 0 ) ; do
 
-    day_end=$(( $day_beg + $days_to_avg ))
+    hour_end=$(( $hour_beg + $hours_to_avg ))
     output_dir=$fig_dir/corr_map/$batchname
-    output=$output_dir/$( printf "corr_map_day%02d-%02d.png" $day_beg $day_end )
+    output=$output_dir/$( printf "corr_map_hours%03d-%03d.png" $hour_beg $hour_end )
     
-    title=$( printf "Day %02d - %02d" $day_beg $day_end )
+    title=$( printf "Hour %d - %d" $hour_beg $hour_end )
     
-    input=$( printf "$input_fmt" $day_beg $day_end ) 
+    input=$( printf "$input_fmt" $hour_beg $hour_end ) 
 
     if [ -f "$output" ]; then
 
@@ -31,12 +31,13 @@ for day_beg in $( seq 17 -1 0 ) ; do
         mkdir -p $output_dir
 
         echo "Produce output: $output"
-        python3 ./src/plot_corr_map.py      \
+        python3 $src_dir/plot_corr_map.py      \
             --input $input                  \
             --output $output                \
             --title  "$title"               \
             --lat-rng 0 65                  \
             --lon-rng 160 275               \
+            --sig-threshold      0.45        \
             --no-display                    \
             --varnames          corr_PH500_SST \
                                 corr_PH850_SST \
