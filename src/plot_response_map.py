@@ -52,6 +52,7 @@ plot_infos = dict(
         unit = "$\\mathrm{kg} / \\mathrm{m} / \\mathrm{s} $",
         levs = np.linspace(-1, 1, 11) * 50,
         cmap = cmocean.cm.balance,
+        cmap_ctl = cmocean.cm.deep,
     ), 
 
     SST = dict(
@@ -59,7 +60,7 @@ plot_infos = dict(
         wrf_varname = "TSK",
         label = "SST",
         unit = "K",
-        levs = np.linspace(-1, 1, 11) * 2,
+        levs = np.linspace(-1, 1, 11) * 1,
         cmap = cmocean.cm.balance,
     ), 
 
@@ -67,7 +68,7 @@ plot_infos = dict(
         selector = None,
         label = "SST",
         unit = "K",
-        levs = np.linspace(-1, 1, 11) * 2,
+        levs = np.linspace(-1, 1, 11) * 1,
         cmap = cmocean.cm.balance,
         offset = 273.15,
         levs_ctl = np.arange(0, 30, 1),
@@ -104,6 +105,21 @@ plot_infos = dict(
         clabel_fmt_ctl = "%d", 
         contour_nolnd_ctl = True, 
     ), 
+
+    TTL_RAIN_LP = dict(
+        selector = None,
+        label = "$ \\mathrm{ACC}_{\\mathrm{ttl}}$ (low-pass)",
+        unit = "mm",
+        levs = np.linspace(-1, 1, 11) * 50,
+        cmap = cmocean.cm.balance,
+        low_pass = 7,
+
+        levs_ctl = np.arange(0, 200, 5),
+        cmap_ctl = cmocean.cm.deep,
+        plot_type_ctl = "contourf", 
+    ), 
+
+
 
     TTL_RAIN = dict(
         selector = None,
@@ -454,7 +470,7 @@ if __name__ == "__main__":
         if plot_type == "contourf":
             
             print("Plotting contourf...")
-            cmap = testIfIn(plot_info, "cmap_ctl", "cmo.gnuplot")
+            cmap = testIfIn(plot_info, "cmap_ctl", "gnuplot")
             mappable = _ax.contourf(x, y, d_factor, levs, cmap=cmap, extend="both", transform=proj_norm)
             cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
             

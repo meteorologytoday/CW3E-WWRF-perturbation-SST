@@ -2,6 +2,7 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 from shared_constants import *
+import scipy.signal
 
 def isIn(pool, *xs):
     if pool is None:
@@ -33,9 +34,44 @@ def integrateVertically(X, ds, avg=False):
 
     return X_INT
 
+def genKernel(size, shape, sigma=1):
+
+    """
+    Creates a 2D Gaussian kernel.
+
+    Parameters:
+        size: The size of the kernel (should be an odd integer).
+        sigma: The standard deviation of the Gaussian distribution.
+    """
+    x, y = np.mgrid[-size//2 + 1:size//2 + 1, -size//2 + 1:size//2 + 1]
+
+    if shape == "gaussian":
+        g = np.exp(-((x**2 + y**2) / (2.0 * sigma**2)))
+    elif shape == "flat":
+        g = np.zeros_like(x) + 1
+    else:
+        raise Exception("Unknown shape: %s" % (shape,))
+
+    return g / g.sum()
+
+
+def filterVariable(da, kernel):
+
+    t_len = len(da.coords["time"])
+    da_lp = da.copy()
+    for t in range(t_len):
+        
+        tmp = da.isel(time=t).to_numpy()
+        tmp_lp = scipy.signal.convolve2d(tmp, kernel, mode='same', boundary='symm')
+        
+        da_lp[t, :, :] = tmp_lp
+
+
+    return da_lp
 
 
 """
+
 def genAnalysis(
     ds,
     data_interval,
@@ -118,18 +154,19 @@ def genAnalysis(
     PRECIP = PRECIP.rename("PRECIP") 
 
 
-
+   
     #if "QICE_TTL" in ds:   
     #    WATER_TTL = ds["QVAPOR_TTL"] + ds["QRAIN_TTL"] + ds["QICE_TTL"] + ds["QSNOW_TTL"] + ds["QCLOUD_TTL"]
     #else:
     #    WATER_TTL = ds["QVAPOR_TTL"] + ds["QRAIN_TTL"] + ds["QCLOUD_TTL"]
-
+    
     #dWATER_TTLdt = ( WATER_TTL - WATER_TTL.shift(time=1) ) / wrfout_data_interval.total_seconds()
     #dWATER_TTLdt = dWATER_TTLdt.rename("dWATER_TTLdt") 
-
+    
     merge_data.append(PRECIP)
     merge_data.append(TTL_RAIN)
     #merge_data.append(dWATER_TTLdt)
+
 
 
     DIV10 = ( ( ds["U10"].roll(west_east=-1) - ds["U10"] ) / ds.DX ).rename("DIV10")
@@ -210,20 +247,32 @@ def genAnalysis(
                     tmp
                 )
 
-    if isIn(varnames, "TTL_RAIN", "PRECIP"):
+    if isIn(varnames, "TTL_RAIN", "PRECIP", "TTL_RAIN_LP", "RAINNC_LP", "RAINC_LP"):
         TTL_RAIN = ds["RAINNC"] + ds["RAINC"] #+ ds["RAINSH"] + ds["SNOWNC"] + ds["HAILNC"] + ds["GRAUPELNC"]
         TTL_RAIN = TTL_RAIN.rename("TTL_RAIN")
         merge_data.append(TTL_RAIN)
 
         PRECIP = ( TTL_RAIN - TTL_RAIN.shift(time=1) ) / (data_interval.total_seconds() / 3600.0) # mm / hr
         #print("PRECIP BEFORE: ", PRECIP)
-        PRECIP = PRECIP.shift(time=-1).rename(time="time_mid").isel(time_mid=slice(0, -1)).drop_vars("XTIME").rename("PRECIP") 
-        #PRECIP = PRECIP.shift(time=-1).rename(time="time_mid").isel(time_mid=slice(0, -1)).rename("PRECIP") 
+        #PRECIP = PRECIP.shift(time=-1).rename(time="time_mid").isel(time_mid=slice(0, -1)).drop_vars("XTIME").rename("PRECIP") 
+        PRECIP = PRECIP.shift(time=-1).rename(time="time_mid").isel(time_mid=slice(0, -1)).rename("PRECIP").drop_vars("XTIME", errors="ignore")
+
+        #if "XTIME" in PRECIP.keys():
+        #    PRECIP = PRECIP.drop_vars("XTIME")
+ 
         merge_data.append(PRECIP)
 
         #print("PRECIP: ", PRECIP)
         #print(np.any(np.isfinite(PRECIP.to_numpy())))
-
+        # Low pass
+        LP_kernel   = genKernel(5, "flat")
+        TTL_RAIN_LP = filterVariable(TTL_RAIN, LP_kernel).rename("TTL_RAIN_LP")
+        RAINNC_LP   = filterVariable(ds["RAINNC"], LP_kernel).rename("RAINNC_LP")
+        RAINC_LP    = filterVariable(ds["RAINC"], LP_kernel).rename("RAINC_LP")
+        merge_data.append(TTL_RAIN_LP)
+        merge_data.append(RAINNC_LP)
+        merge_data.append(RAINC_LP)
+     
 
     if isIn(varnames, "SST_NOLND"):
        

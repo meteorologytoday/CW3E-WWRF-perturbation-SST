@@ -3,7 +3,7 @@
 source 00_setup.sh
 source 98_trapkill.sh
     
-nproc=5
+nproc=2
 
 input_dir=gendata/corr_remote/method2/
 
@@ -38,6 +38,8 @@ for day_beg in $( seq 17 -1 0 ) ; do
             --lat-rng 0 65                  \
             --lon-rng 160 275               \
             --no-display                    \
+            --sig-threshold 0.6             \
+            --ncol 2                        \
             --varnames          corr_PH500_SST \
                                 corr_PH850_SST \
                                 corr_PRECIP_SST \

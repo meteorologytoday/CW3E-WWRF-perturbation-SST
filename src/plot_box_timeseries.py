@@ -1,4 +1,5 @@
 import xarray as xr
+import traceback
 import pandas as pd
 import numpy as np
 import argparse
@@ -121,6 +122,7 @@ if __name__ == "__main__":
     parser.add_argument('--input-dirs', type=str, nargs="+", help='Input directories.', required=True)
     parser.add_argument('--labels', type=str, nargs="+", help='Input directories.', default=None)
     parser.add_argument('--no-display', action="store_true")
+    parser.add_argument('--no-legend', action="store_true")
 
     parser.add_argument('--time-rng', type=int, nargs=2, help="Time range in hours after --exp-beg-time", required=True)
     parser.add_argument('--exp-beg-time', type=str, help='analysis beg time', required=True)
@@ -222,6 +224,7 @@ if __name__ == "__main__":
 
             data.append(xr.merge(extracted_data))
         except Exception as e:
+            traceback.print_exc()
             print("Loading error. Put None.")
             data.append(None)
 
@@ -309,7 +312,10 @@ if __name__ == "__main__":
         
     date_format = DateFormatter('%m/%d') # Example format, customize as needed
     for _ax in ax_flatten:
-        _ax.legend()
+        
+        if not args.no_legend:
+            _ax.legend()
+        
         _ax.grid()
         _ax.xaxis.set_major_formatter(date_format)
         _ax.tick_params(axis='x', labelrotation=45)

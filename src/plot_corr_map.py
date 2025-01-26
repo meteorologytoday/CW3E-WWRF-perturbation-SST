@@ -39,6 +39,8 @@ if __name__ == "__main__":
     parser.add_argument('--lat-rng', type=float, nargs=2, help="Latitude range for plotting", default=[-90.0, 90.0])
     parser.add_argument('--lon-rng', type=float, nargs=2, help="Latitude range for plotting", default=[0.0, 360.0])
     parser.add_argument('--sig-threshold', type=float, default=np.nan)
+    parser.add_argument('--sig-style', type=str, default="dotted", choices=["dotted", "nan"])
+    parser.add_argument('--ncol', type=int, help="Latitude range for plotting", default=-1)
 
     args = parser.parse_args()
 
@@ -77,8 +79,12 @@ if __name__ == "__main__":
     lon_span = lon_rng[1] - lon_rng[0]
     lat_span = lat_rng[1] - lat_rng[0]
     
-    ncol = 1
-    nrow = len(args.varnames)
+    ncol = args.ncol
+
+    if ncol == -1:
+        ncol = 1
+
+    nrow = int( np.ceil( len(args.varnames) / ncol ) )
 
     h = 4.0
     w_map = h * lon_span / lat_span
@@ -114,7 +120,7 @@ if __name__ == "__main__":
         sharex=False,
     )
 
-    ax_flatten = ax.flatten()
+    ax_flatten = ax.transpose().flatten()
 
     fig.suptitle(args.title)
 
@@ -122,24 +128,28 @@ if __name__ == "__main__":
        
         print("[%d/%d] Plotting varname : %s" % (j+1, len(args.varnames), varname,))
         
-        _ax = ax[j, 0]
+        _ax = ax_flatten[j]
 
         coords = ds.coords
         x = coords["XLONG"] % 360
         y = coords["XLAT"]
-        d = ds[varname]
+        d = ds[varname].to_numpy()
         
+        if args.sig_style == "nan" and np.isfinite(args.sig_threshold):
+            d[np.abs(d) < args.sig_threshold] = np.nan
+            
+            
         levs = np.linspace(-1, 1, 21)
         
         cmap = "cmo.balance"
-        mappable = _ax.contourf(x, y, d, levs, cmap=cmap, extend="both", transform=proj_norm)
+        mappable = _ax.contourf(x, y, d, levs, cmap=cmap, extend="both", transform=proj_norm, zorder=5)
         cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
         
         cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
         cb.ax.set_ylabel("Correlation")
        
         # Dot the significant data
-        if not np.isnan(args.sig_threshold):
+        if args.sig_style == "dotted" and np.isfinite(args.sig_threshold):
             print("Significant threshold is given: %.2f" % (args.sig_threshold,))            
             # Plot the hatch to denote significant data
             _dot = np.zeros_like(d)
@@ -148,7 +158,7 @@ if __name__ == "__main__":
             _dot[ _label_idx                 ] = 0.75
             _dot[ np.logical_not(_label_idx) ] = 0.25
 
-            cs = _ax.contourf(x, y, _dot, colors='none', levels=[0, 0.5, 1], hatches=[None, ".."], transform=proj_norm)
+            cs = _ax.contourf(x, y, _dot, colors='none', levels=[0, 0.5, 1], hatches=[None, ".."], transform=proj_norm, zorder=6)
 
             # Remove the contour lines for hatches 
             for _, collection in enumerate(cs.collections):
