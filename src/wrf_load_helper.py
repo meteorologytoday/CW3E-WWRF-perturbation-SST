@@ -287,6 +287,8 @@ def loadWRFDataFromDir(
         inclusive = inclusive,
     )
 
+    #print("Slected dts = ", select_dts )
+
     start_select = findfirst(ds_dts == beg_time)
     if start_select == -1:
         raise Exception("Error: Cannot find the matching `beg_time` = %s" % (str(beg_time),))
@@ -295,7 +297,7 @@ def loadWRFDataFromDir(
         if ds_dts[start_select + i] != select_dt:
             raise Exception("Error: Cannot find the matching `time` = %s" % (str(select_dt),))
             
-    ds = ds.isel( time = slice(start_select, start_select + len(select_dts) ) )
+    ds = ds.isel( time = slice(start_select, start_select + len(select_dts) + 1 ) )
     ts = ds.coords["time"] 
     if verbose:
         print("Loaded time: ")
