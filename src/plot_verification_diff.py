@@ -96,8 +96,8 @@ plot_infos = dict(
         label = "Accumulative total precip",
         unit = "$\\mathrm{mm}$",
         factor = 1e3,
-        lim = [0, 80],
-        #levs = np.linspace(-1, 1, 11) * 50,
+        lim = [-10, 10],
+        ticks = np.linspace(-1, 1, 11) * 10,
         #cmap = cmocean.cm.balance,
     ), 
 
@@ -210,10 +210,10 @@ plot_infos = dict(
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--input-WRF', type=str, nargs="+", help='Input directories.', required=True)
-    parser.add_argument('--input-ERA5', type=str, help='Input directories.', required=True)
-    parser.add_argument('--input-PRISM', type=str, help='Input directories.', required=True)
-    
+    parser.add_argument('--input-WRF1', type=str, nargs="+", help='Input directories.', required=True)
+    parser.add_argument('--input-WRF2', type=str, nargs="+", help='Input directories.', required=True)
+    parser.add_argument('--dataset1', type=str, default=None)
+    parser.add_argument('--dataset2', type=str, default=None)
     parser.add_argument('--region', type=str, help='Input directories.', required=True)
     
     parser.add_argument('--no-display', action="store_true")
@@ -230,13 +230,12 @@ if __name__ == "__main__":
     def preprocess(ds):
         return genACC(pullVariableOut(ds), include_old=True)
     
-    data_WRF = [ preprocess(xr.open_dataset(fname).sel(region=args.region)["data"]) for fname in args.input_WRF ]
-    ds_ERA5  = preprocess(xr.open_dataset(args.input_ERA5).sel(region=args.region)["obs_data"])
-    ds_PRISM = preprocess(xr.open_dataset(args.input_PRISM).sel(region=args.region)["obs_data"])
+    data_WRF1 = [ preprocess(xr.open_dataset(fname).sel(region=args.region)["data"]) for fname in args.input_WRF1 ]
+    data_WRF2 = [ preprocess(xr.open_dataset(fname).sel(region=args.region)["data"]) for fname in args.input_WRF2 ]
+    data_WRF_diff = [ds1 - ds2 for ds1, ds2 in zip(data_WRF1, data_WRF2)]
+    data_WRF_mean = [(ds1 + ds2) / 2 for ds1, ds2 in zip(data_WRF1, data_WRF2)]
+ 
    
-
-    print(list(data_WRF[0].keys()))
-
 
     # Plot data
     print("Loading Plotting Modules: Matplotlib and Cartopy.")
@@ -258,7 +257,7 @@ if __name__ == "__main__":
     import tool_fig_config
     print("Done.")     
 
-    ncol = 1
+    ncol = 2
     nrow = len(args.varnames)
 
     h = 4.0
@@ -289,8 +288,12 @@ if __name__ == "__main__":
         sharex=False,
     )
 
+    extra_title = ""
+    if args.dataset1 is not None and args.dataset2 is not None:
+        
+        extra_title = ". %s minus %s" % (args.dataset1, args.dataset2)
 
-    fig.suptitle("Region = %s" % ( args.region, ))
+    fig.suptitle("Region = %s%s" % ( args.region, extra_title))
     ax_flatten = ax.flatten()
 
     for j, varname in enumerate(args.varnames):
@@ -298,81 +301,44 @@ if __name__ == "__main__":
         print("Varname : ", varname)
 
         _ax0 = ax[j, 0]
-        #_ax1 = ax[j, 1]
+        _ax1 = ax[j, 1]
         ##_ax2 = ax[j, 2]
 
         plot_info = plot_infos[varname] 
         factor = plot_info["factor"]
 
-        # Plot ERA5
-        x = ds_ERA5.coords["time"]
-        y_obs = ds_ERA5[varname] * factor
-        _ax0.plot(x, y_obs, "k-", linewidth=2, label="ERA5", zorder=5)
-        
-        
-        print("keys = ", list(ds_PRISM.keys()))
-        if varname in ["total_precipitation", ]:
-
-            print("Variable in PRISM...")
-            # I am not using PRISM time because it is climatology, 
-            # I put dummy year 2001
-            da_PRISM = ds_PRISM[varname]
-            PRISM_mean = da_PRISM.mean(dim="year").to_numpy()
-            PRISM_std  = da_PRISM.std(dim="year").to_numpy()
-
-            print()
-
-            _ax0.errorbar(x.to_numpy(), PRISM_mean, PRISM_std, color="blue", linewidth=2, zorder=5)
-
-
-
-        for i, ds in enumerate(data_WRF):
+        for i, (ds_diff, ds_mean) in enumerate(zip(data_WRF_diff, data_WRF_mean)):
             
             # Plot WRF
-            x = ds.coords["time"]
+            x = ds_diff.coords["time"]
             
-            y_ens = ds[varname] * factor
-            y_mean = y_ens.mean(dim="ens_id")
-            y_std  = y_ens.std(dim="ens_id")
-
-            _ax0.plot(x, y_ens, linewidth=1, label="WRF", zorder=4, linestyle="dashed")
-                        
+            ydiff_ens = ds_diff[varname] * factor
+            ydiff_mean = ydiff_ens.mean(dim="ens_id")
+            ydiff_std  = ydiff_ens.std(dim="ens_id")
             
-            #print("y_std = ", y_std)
-            #print("y_mean = ", y_mean)
-            _ax0.errorbar(x.to_numpy(), y_mean.to_numpy(), y_std.to_numpy(), color="red", linewidth=2, zorder=5)
+            ymean_ens = ds_mean[varname] * factor
+            ymean_mean = ymean_ens.mean(dim="ens_id")
 
-            # compute CRPS
+            _ax0.plot(x, ydiff_ens, linewidth=1, label="WRF", zorder=4, linestyle="dashed")
+            _ax0.errorbar(x.to_numpy(), ydiff_mean.to_numpy(), ydiff_std.to_numpy(), color="red", linewidth=2, zorder=5)
 
-            crps_WRF = computeCRPS(y_mean, y_std, y_obs)
 
-            #_ax1.plot(x, crps_WRF, color="black", linewidth=2, label="WRF", zorder=4,)
-            
-
-            if varname == "total_precipitation":
-                
-                # compute CRPSS
-                crps_PRISM = computeCRPS(PRISM_mean, PRISM_std, y_obs)
-
-                
-                CRPSS = 1.0 - crps_WRF / crps_PRISM
-
-                #_ax2.plot(x, CRPSS, color="black", linewidth=2, label="WRF", zorder=4,)
-            
-                
-                
+            _ax1.plot(x, ydiff_mean.to_numpy() / ymean_mean.to_numpy() * 1e2, linewidth=2, color="red", label="WRF", zorder=4, linestyle="solid")
 
 
 
-        _ax0.set_title("%s [%s]" % (plot_info["label"], plot_info["unit"]))
+        _ax0.set_title("$\\Delta$%s [%s]" % (plot_info["label"], plot_info["unit"]))
 
         if "lim" in plot_info:
             _ax0.set_ylim(plot_info["lim"])
 
-        #_ax1.set_ylim([0, 8])
-        #_ax2.set_ylim([-1, 1])
+            if "ticks" in plot_info:
+                _ax0.set_yticks(plot_info["ticks"])
 
-        
+        _ax1.set_ylim([-4, 2])
+        _ax1.set_ylabel("[%]")
+        _ax1.set_title("Change of ensemble mean by percentage")
+
     date_format = DateFormatter('%m/%d') # Example format, customize as needed
     for _ax in ax_flatten:
         

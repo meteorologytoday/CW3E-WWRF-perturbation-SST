@@ -12,6 +12,18 @@ import cmocean
 from pathlib import Path
 from multiprocessing import Pool 
 
+def parse_ranges(input_str):
+    numbers = []
+    for part in input_str.split(','):
+        part = part.strip()
+        if '-' in part:
+            start, end = map(int, part.split('-'))
+            numbers.extend(range(start, end + 1))
+        else:
+            numbers.append(int(part))
+    return numbers
+
+
 mapping = {
     "diff_TTL_RAIN" : "total_precipitation",
     "diff_RAINC"    : "convective_precipitation",
@@ -29,7 +41,7 @@ def work(details):
     lead_days = details["lead_days"]
     end_time  = beg_time + pd.Timedelta(days=lead_days)
     wsm = details["wsm"] 
-    region = details["region"]
+    regions = details["regions"]
 
     sel_time = [beg_time + pd.Timedelta(days=i) for i in range(lead_days)]
 
@@ -40,7 +52,8 @@ def work(details):
 
     try:
 
-        ds_mask = xr.open_dataset(mask_file).sel(region=region)
+        ds_mask = xr.open_dataset(mask_file)
+
         
         ds = wrf_load_helper.loadWRFDataFromDir(
             wsm, 
@@ -52,27 +65,34 @@ def work(details):
             verbose=True,
             inclusive="both",
         ).sel(time=sel_time)
-       
+        
+        if regions is not None:
+            ds_mask = ds_mask.sel(region=regions)
+        
+        
         TTL_RAIN = (ds["RAINC"] + ds["RAINNC"]).rename("TTL_RAIN")
         ds = xr.merge([ds, TTL_RAIN])
-
-        print(ds.coords["time"].to_numpy())
+        
+        #print(ds.coords["time"].to_numpy())
         verification_data_array = []
- 
+        
         # Compute daily accumulative rainfall
         for acc_varname in ["RAINC", "RAINNC", "TTL_RAIN"]:
-            
+               
             new_varname = "diff_%s" % (acc_varname,)
             da = ds[acc_varname]
             diff = (da.shift(time=-1) - da).rename(new_varname).drop_vars("XTIME", errors="ignore")
-        
+            
             verification_data_array.append(diff)
-
-
-        verification_ds = xr.merge(verification_data_array)
-        verification_ds_avg = verification_ds.weighted(ds_mask["wgt_WRF"] * ds_mask["mask_WRF"]).mean(dim=["south_north", "west_east"]).compute()
-
         
+    
+        for i, da in enumerate(verification_data_array):
+            verification_data_array[i] = da.expand_dims(dim={"region": ds_mask.coords["region"]}, axis=1)
+            
+        verification_ds = xr.merge(verification_data_array)
+
+        #print(verification_ds)
+        verification_ds_avg = verification_ds.weighted(ds_mask["wgt_WRF"] * ds_mask["mask_WRF"]).mean(dim=["south_north", "west_east"]).compute()
 
         result["status"] = "OK"
         result["data"] = verification_ds_avg
@@ -98,7 +118,7 @@ if __name__ == "__main__":
     parser.add_argument('--expname', type=str, help='Input directories.', required=True)
     parser.add_argument('--subgroup', type=str, help='Input directories.', default="BLANK")
 
-    parser.add_argument('--ens-size', type=int, help="Time range in hours after --exp-beg-time", required=True)
+    parser.add_argument('--ens-ids', type=str, help="Ens ids. Comma separated and can use range like 1-3,5,23-25", required=True)
     parser.add_argument('--time-beg', type=int, help="Time beg after --exp-beg-time", required=True)
     parser.add_argument('--lead-days', type=int, help="How many lead days" , required=True)
     parser.add_argument('--exp-beg-time', type=str, help='analysis beg time', required=True)
@@ -106,7 +126,7 @@ if __name__ == "__main__":
     parser.add_argument('--frames-per-wrfout-file', type=int, help='Number of frames in each wrfout file.', required=True)
     parser.add_argument('--wrfout-suffix', type=str, default="")
     parser.add_argument('--mask', type=str, help="Mask file", required=True)
-    parser.add_argument('--region', type=str, help='Region name.', required=True)
+    parser.add_argument('--regions', type=str, nargs="*", help='Region name.', default=None)
     parser.add_argument('--nproc', type=int, help="Time range in hours after --exp-beg-time", default=1)
     
     parser.add_argument('--output', type=str, help='Output netCDF file.', required=True)
@@ -115,6 +135,8 @@ if __name__ == "__main__":
 
     print(args)
 
+    ens_ids = parse_ranges(args.ens_ids)
+    print("Ensemble ids: %s => %s" % (args.ens_ids, ",".join(["%d" % i for i in ens_ids] ) ))
     verification_varnames = ["diff_RAINC", "diff_RAINNC", "diff_TTL_RAIN"]
 
     exp_beg_time = pd.Timestamp(args.exp_beg_time)
@@ -128,7 +150,8 @@ if __name__ == "__main__":
     )
     
     # Loading   
-    data = [] 
+    data = []
+    ens_id_to_idx_mapping = dict() 
     
     input_root = Path(args.input_root)
     input_args = []
@@ -140,8 +163,9 @@ if __name__ == "__main__":
         casename = f"{args.expname:s}_{args.subgroup:s}"
         subgroup_dir = args.subgroup
 
-    for ens_id in range(args.ens_size):
+    for i, ens_id in enumerate(ens_ids):
       
+        ens_id_to_idx_mapping[ens_id] = i
         input_dir = input_root / subgroup_dir / f"{casename:s}_ens{ens_id:02d}" / "output" / "wrfout"
         
         input_args.append((dict(
@@ -152,13 +176,13 @@ if __name__ == "__main__":
             beg_time     = time_beg,
             lead_days    = args.lead_days,
             wsm          = wsm,
-            region       = args.region,
+            regions      = args.regions,
         ),))
 
 
 
 
-    output_data = np.zeros((args.lead_days,  len(verification_varnames), args.ens_size, ))
+    output_data = np.zeros((args.lead_days, len(args.regions),  len(verification_varnames), len(ens_ids), ))
 
     _time = None
     failed_ens = []
@@ -168,14 +192,14 @@ if __name__ == "__main__":
             if result['status'] == 'OK':
                
                 ens_id = result['details']['ens_id'] 
-                for i, varname in enumerate(verification_varnames):
+                for k, varname in enumerate(verification_varnames):
 
                     factor = 1.0
                     if varname in ["diff_RAINNC", "diff_RAINC", "diff_TTL_RAIN"]:
                         factor = 1e-3
                     
-                     
-                    output_data[:, i, ens_id] = result['data'][varname].to_numpy() * factor
+                    idx = ens_id_to_idx_mapping[ens_id]                    
+                    output_data[:, :, k, idx] = result['data'][varname].to_numpy() * factor
                     
                     if _time is None:
                         _time = result['data'].coords["time"]
@@ -191,13 +215,14 @@ if __name__ == "__main__":
     output_ds = xr.Dataset(
         
         data_vars = dict(
-            data=(["time", "variable", "ens_id"], output_data),
+            data=(["time", "region", "variable", "ens_id"], output_data),
         ),
         
         coords=dict(
             time = _time,
             variable = new_varnames,
-            ens_id = np.arange(args.ens_size),
+            ens_id = ens_ids,
+            region = args.regions,
         ),
     )
     

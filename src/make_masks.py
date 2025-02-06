@@ -167,23 +167,19 @@ for i, region in enumerate(regions):
     _mask_PRISM[ocn_idx_PRISM] = 0
     mask_PRISM[i, :, :] = _mask_PRISM
 
-    """
     print("Make ERA5 mask with shape...")
     _mask_ERA5 = make_mask_with_shape(llon_ERA5, llat_ERA5, polygon)
     _mask_ERA5[ocn_idx_ERA5] = 0
     mask_ERA5[i, :, :] = _mask_ERA5
     
-
-
     print("Make WRF mask with shape...")
     _mask_WRF = make_mask_with_shape(llon_WRF, llat_WRF, polygon)
     _mask_WRF[ocn_idx_WRF] = 0
     mask_WRF[i, :, :] = _mask_WRF
     print("Done.")
-    """
 
-#new_ds = xr.merge([mask_PRISM, wgt_PRISM, mask_WRF, wgt_WRF, mask_ERA5])
-new_ds = xr.merge([mask_PRISM, wgt_PRISM])
+new_ds = xr.merge([mask_PRISM, wgt_PRISM, mask_WRF, wgt_WRF, mask_ERA5])
+#new_ds = xr.merge([mask_PRISM, wgt_PRISM])
 
 print("Output file: ", args.output)
 new_ds.to_netcdf(args.output)
