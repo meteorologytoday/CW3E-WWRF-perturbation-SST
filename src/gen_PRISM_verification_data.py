@@ -6,6 +6,34 @@ import argparse
 import os
 from pathlib import Path
 
+def getAvgData(dt, wgt):
+
+    PRISM_filename = "/expanse/lustre/scratch/t2hsu/temp_project/data/PRISM_stable_4kmD2/PRISM_ppt_stable_4kmD2-{ymd:s}.nc".format(
+       ymd = dt.strftime("%Y-%m-%d"),
+    )
+
+    ds = xr.open_dataset(PRISM_filename).isel(time=0)
+   
+    data = ds[verification_varname].to_numpy()
+
+    #print(data[np.isfinite(data)])
+
+    data[np.isnan(data)] = 0.0
+
+    #print(data.shape, "; ", wgt.shape)
+
+
+    avg_data = np.sum(data * wgt) / np.sum(wgt)
+
+    return avg_data
+
+
+
+
+
+
+
+
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process some integers.')
@@ -13,7 +41,7 @@ if __name__ == "__main__":
     parser.add_argument('--test-days', type=int, help='Verification date range.', default=10)
     parser.add_argument('--region-file', type=str, help='Region file.', required=True)
     parser.add_argument('--output', type=str, help='Output filename in nc file.', required=True)
-    parser.add_argument('--year-range', type=int, nargs=2, help='Output filename in nc file.', default=[1981, 2014])
+    parser.add_argument('--year-range', type=int, nargs=2, help='Output filename in nc file.', default=[1981, 2021])
 
     args = parser.parse_args()
 
@@ -29,7 +57,8 @@ if __name__ == "__main__":
     verification_varnames = ["total_precipitation", ]
     
 
-    output_data = np.zeros((args.test_days, ds_region.dims["region"], len(verification_varnames), len(years)))
+    output_data_clim = np.zeros((args.test_days, ds_region.dims["region"], len(verification_varnames), len(years)))
+    output_data_obs  = np.zeros((args.test_days, ds_region.dims["region"], len(verification_varnames),))
     dts = pd.date_range(beg_date, end_date, freq="D", inclusive="left")
         
     #print("latitude: ", ds_region["latitude"].to_numpy())
@@ -42,7 +71,6 @@ if __name__ == "__main__":
         mask = ds_region["mask_PRISM"].sel(region=region).to_numpy()
         wgt  = np.cos(ds_region["lat_PRISM"].to_numpy() * np.pi/180.0)[:, None]
        
-        valid_idx = mask == 1
         wgt_valid = wgt * mask 
     
 
@@ -58,28 +86,18 @@ if __name__ == "__main__":
                
                 dt = beg_date + pd.Timedelta(days = idx_d)
 
+                output_data_obs[idx_d, idx_r, idx_vv] = getAvgData(dt, wgt_valid)
 
+                # Clim
                 for idx_y, year in enumerate(years):
-
-                    PRISM_filename = "/expanse/lustre/scratch/t2hsu/temp_project/data/PRISM/PRISM-ppt-{y:04d}-{md:s}.nc".format(
-                       y=year,
-                       md = dt.strftime("%m-%d"),
-                    )
- 
-                    ds = xr.open_dataset(PRISM_filename).isel(time=0)
-                    
-                    data = ds[verification_varname].to_numpy()
-                    data[np.isnan(data)] = 0.0
-                    avg_data = np.sum(data * wgt_valid) / np.sum(wgt_valid)
-            
-                    output_data[idx_d, idx_r, idx_vv, idx_y] = avg_data
-
-
+                    dt_clim = pd.Timestamp("%04d-%s" % (year, dt.strftime("%m-%d")))
+                    output_data_clim[idx_d, idx_r, idx_vv, idx_y] = getAvgData(dt_clim, wgt_valid)
 
     output_ds = xr.Dataset(
         
         data_vars = dict(
-            obs_data=(["time", "region", "variable", "year"], output_data),
+            clim_data=(["time", "region", "variable", "year"], output_data_clim),
+            obs_data=(["time", "region", "variable",], output_data_obs),
         ),
         
         coords=dict(

@@ -9,4 +9,5 @@ python3 src/make_masks.py \
     --test-PRISM-file $test_PRISM_file \
     --test-ERA5-file $test_ERA5_file \
     --test-WRF-file  $test_WRF_file  \
+    --nproc 6 \
     --output gendata/mask.nc

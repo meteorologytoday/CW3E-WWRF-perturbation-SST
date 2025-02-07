@@ -34,7 +34,7 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     subgroup1_str="_${subgroup1}"
     subgroup2_str="_${subgroup2}"
 
-    for region in CA coastal sierra ; do
+    for region in city_LA CA coastal sierra ; do
 
         input_WRF1=$verification_dir/verification_WRF_${expname1}${subgroup1_str}.nc
         input_WRF2=$verification_dir/verification_WRF_${expname2}${subgroup2_str}.nc

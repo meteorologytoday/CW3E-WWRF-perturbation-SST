@@ -96,7 +96,7 @@ plot_infos = dict(
         label = "Accumulative total precip",
         unit = "$\\mathrm{mm}$",
         factor = 1e3,
-        lim = [0, 80],
+        lim = [0, 200],
         #levs = np.linspace(-1, 1, 11) * 50,
         #cmap = cmocean.cm.balance,
     ), 
@@ -211,7 +211,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--input-WRF', type=str, nargs="+", help='Input directories.', required=True)
-    parser.add_argument('--input-ERA5', type=str, help='Input directories.', required=True)
+#    parser.add_argument('--input-ERA5', type=str, help='Input directories.', required=True)
     parser.add_argument('--input-PRISM', type=str, help='Input directories.', required=True)
     
     parser.add_argument('--region', type=str, help='Input directories.', required=True)
@@ -231,8 +231,9 @@ if __name__ == "__main__":
         return genACC(pullVariableOut(ds), include_old=True)
     
     data_WRF = [ preprocess(xr.open_dataset(fname).sel(region=args.region)["data"]) for fname in args.input_WRF ]
-    ds_ERA5  = preprocess(xr.open_dataset(args.input_ERA5).sel(region=args.region)["obs_data"])
-    ds_PRISM = preprocess(xr.open_dataset(args.input_PRISM).sel(region=args.region)["obs_data"])
+#    ds_ERA5  = preprocess(xr.open_dataset(args.input_ERA5).sel(region=args.region)["obs_data"])
+    ds_PRISM_clim = preprocess(xr.open_dataset(args.input_PRISM).sel(region=args.region)["clim_data"])
+    ds_PRISM_obs  = preprocess(xr.open_dataset(args.input_PRISM).sel(region=args.region)["obs_data"])
    
 
     print(list(data_WRF[0].keys()))
@@ -304,25 +305,27 @@ if __name__ == "__main__":
         plot_info = plot_infos[varname] 
         factor = plot_info["factor"]
 
-        # Plot ERA5
-        x = ds_ERA5.coords["time"]
-        y_obs = ds_ERA5[varname] * factor
-        _ax0.plot(x, y_obs, "k-", linewidth=2, label="ERA5", zorder=5)
+        # Plot PRISM observation data
+        x = ds_PRISM_obs.coords["time"]
+        y_obs = ds_PRISM_obs[varname]
+        print(y_obs)
+        _ax0.plot(x, y_obs, "k-", linewidth=2, label="PRISM_obs", zorder=5)
         
         
-        print("keys = ", list(ds_PRISM.keys()))
+        #print("keys = ", list(ds_PRISM_obs.keys()))
         if varname in ["total_precipitation", ]:
 
             print("Variable in PRISM...")
+            
             # I am not using PRISM time because it is climatology, 
             # I put dummy year 2001
-            da_PRISM = ds_PRISM[varname]
-            PRISM_mean = da_PRISM.mean(dim="year").to_numpy()
-            PRISM_std  = da_PRISM.std(dim="year").to_numpy()
+            da_clim = ds_PRISM_clim[varname]
+            clim_mean = da_clim.mean(dim="year").to_numpy()
+            clim_std  = da_clim.std(dim="year").to_numpy()
 
             print()
 
-            _ax0.errorbar(x.to_numpy(), PRISM_mean, PRISM_std, color="blue", linewidth=2, zorder=5)
+            _ax0.errorbar(x.to_numpy(), PRISM_mean, PRISM_std, color="blue", linewidth=2, zorder=5, label="PRISM_clim")
 
 
 

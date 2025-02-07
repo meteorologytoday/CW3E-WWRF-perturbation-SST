@@ -96,7 +96,7 @@ plot_infos = dict(
         label = "Accumulative total precip",
         unit = "$\\mathrm{mm}$",
         factor = 1e3,
-        lim = [-10, 10],
+        lim = [-20, 20],
         ticks = np.linspace(-1, 1, 11) * 10,
         #cmap = cmocean.cm.balance,
     ), 
@@ -330,12 +330,13 @@ if __name__ == "__main__":
         _ax0.set_title("$\\Delta$%s [%s]" % (plot_info["label"], plot_info["unit"]))
 
         if "lim" in plot_info:
-            _ax0.set_ylim(plot_info["lim"])
+            #_ax0.set_ylim(plot_info["lim"])
 
             if "ticks" in plot_info:
-                _ax0.set_yticks(plot_info["ticks"])
+                #_ax0.set_yticks(plot_info["ticks"])
+                pass
 
-        _ax1.set_ylim([-4, 2])
+        #_ax1.set_ylim([-10, 2])
         _ax1.set_ylabel("[%]")
         _ax1.set_title("Change of ensemble mean by percentage")
 

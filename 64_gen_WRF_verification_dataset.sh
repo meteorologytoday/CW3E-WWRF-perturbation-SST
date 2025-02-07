@@ -22,13 +22,12 @@ for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
     echo ":: subgroup = $subgroup"
  
     input_root=$WRF_archived_root/exp_${expname}/runs
-
     output_file=$output_dir/verification_WRF_${expname}_${subgroup}.nc
 
     python3 src/gen_WRF_verification_data.py             \
         --expname $expname                               \
         --subgroup $subgroup                             \
-        --regions CA sierra coastal                      \
+        --regions city_LA CA sierra coastal              \
         --input-root $input_root                         \
         --exp-beg-time $exp_beg_time                     \
         --wrfout-data-interval $wrfout_data_interval     \

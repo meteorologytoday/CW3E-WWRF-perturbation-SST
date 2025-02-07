@@ -36,7 +36,7 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
         
     subgroup_str="_${subgroup}"
 
-    for region in CA coastal sierra ; do
+    for region in city_LA CA coastal sierra ; do
 
         input_WRF=$verification_dir/verification_WRF_${expname}${subgroup_str}.nc
         input_ERA5=$verification_dir/verification_ERA5.nc
@@ -46,7 +46,6 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
 #            --varnames total_precipitation  convective_precipitation large_scale_precipitation  \
         python3 ./src/plot_verification.py    \
             --input-WRF $input_WRF            \
-            --input-ERA5 $input_ERA5          \
             --input-PRISM $input_PRISM        \
             --varnames ACC_total_precipitation \
             --output $output                  \
