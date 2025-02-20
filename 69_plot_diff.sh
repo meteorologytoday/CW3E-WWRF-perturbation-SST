@@ -9,8 +9,9 @@ output_dir=figures/diff
 
 mkdir -p $output_dir
 
+#    Perturb1-1  PAT00_AMP-1.0 Baseline01 "BLANK" 
 params=(
-    Perturb1-1  PAT00_AMP-1.0 Baseline01 "BLANK" 
+    Perturb1-1  PAT00_AMP-1.0  Perturb1-1   PAT00_AMP1.0 
 )
 
 nparams=4

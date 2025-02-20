@@ -211,6 +211,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--input-WRF', type=str, nargs="+", help='Input directories.', required=True)
+    parser.add_argument('--WRF-labels', type=str, nargs="+", help='Input directories.', default=None)
 #    parser.add_argument('--input-ERA5', type=str, help='Input directories.', required=True)
     parser.add_argument('--input-PRISM', type=str, help='Input directories.', required=True)
     
@@ -235,6 +236,18 @@ if __name__ == "__main__":
     ds_PRISM_clim = preprocess(xr.open_dataset(args.input_PRISM).sel(region=args.region)["clim_data"])
     ds_PRISM_obs  = preprocess(xr.open_dataset(args.input_PRISM).sel(region=args.region)["obs_data"])
    
+
+    if args.WRF_labels is None:
+        
+        args.WRF_labels = [ args.input_WRF[i] for i in range(len(args.input_WRF)) ]
+        
+    else:
+        
+        if len(args.WRF_labels) != len(data_WRF):
+            raise Exception("If `--WRF-lables` are provided, they should be as many as `--input-WRF`")
+
+        
+        
 
     print(list(data_WRF[0].keys()))
 
@@ -334,16 +347,17 @@ if __name__ == "__main__":
             # Plot WRF
             x = ds.coords["time"]
             
+            ens_size = ds.dims["ens_id"]
             y_ens = ds[varname] * factor
             y_mean = y_ens.mean(dim="ens_id")
             y_std  = y_ens.std(dim="ens_id")
 
-            _ax0.plot(x, y_ens, linewidth=1, label="WRF", zorder=4, linestyle="dashed")
+            #_ax0.plot(x, y_ens, linewidth=1, label="WRF", zorder=4, linestyle="dashed")
                         
             
             #print("y_std = ", y_std)
             #print("y_mean = ", y_mean)
-            _ax0.errorbar(x.to_numpy(), y_mean.to_numpy(), y_std.to_numpy(), color="red", linewidth=2, zorder=5)
+            _ax0.errorbar(x.to_numpy() + pd.Timedelta(hours=i*1), y_mean.to_numpy(), y_std.to_numpy() / np.sqrt(ens_size) , color="red", linewidth=1, zorder=5)
 
             # compute CRPS
 

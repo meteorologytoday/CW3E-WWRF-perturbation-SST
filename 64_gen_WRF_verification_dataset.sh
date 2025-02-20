@@ -1,6 +1,6 @@
 #!/bin/bash
 
-nproc=10
+nproc=1
  
 if [ "$1" == "" ]; then
     echo "Error: Need to provide an argument as the input configuration file."
@@ -27,7 +27,6 @@ for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
     python3 src/gen_WRF_verification_data.py             \
         --expname $expname                               \
         --subgroup $subgroup                             \
-        --regions city_LA CA sierra coastal              \
         --input-root $input_root                         \
         --exp-beg-time $exp_beg_time                     \
         --wrfout-data-interval $wrfout_data_interval     \
@@ -38,8 +37,10 @@ for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
         --lead-days $verification_days                   \
         --mask $mask_file                                \
         --nproc $nproc                                   \
-        --output $output_file
+        --output $output_file 
 
 done
+
+wait
 
 echo "Done."

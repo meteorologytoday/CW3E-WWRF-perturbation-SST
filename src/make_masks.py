@@ -15,6 +15,33 @@ from shapely.geometry.polygon import Polygon
 import rasterio
 from rasterio.transform import xy
 
+import geopandas as gpd
+
+@np.vectorize
+def cvt_to_np180(lon):
+    return (lon + 180) % 360.0 - 180
+
+@np.vectorize
+def cvt_to_360(lon):
+    return lon % 360.0
+
+
+def loadShape(f):
+    gdf = gpd.read_file(f).to_crs(crs="4326")
+
+    if len(gdf) != 1:
+        raise Exception(f"The file {f:s} contains more than one shape objects.") 
+
+
+    #print(gdf)
+
+    #gdf['longtidue'] = (gdf['longitude'] % 360)
+
+    #print(gdf)
+
+    return gdf 
+
+
 
 def make_mask_with_shape(xx, yy, shp):
     
@@ -24,8 +51,28 @@ def make_mask_with_shape(xx, yy, shp):
     for i1 in range(N1):
         for i2 in range(N2):
             p = Point(xx[i1, i2], yy[i1, i2])
-            mask[i1, i2] = 1 if shp.contains(p) else 0
+            mask[i1, i2] = 1 if np.any(shp.contains(p)) else 0
 
+    return mask
+
+
+def make_mask_with_shape_new(xx, yy, shp):
+    
+    N1, N2 = xx.shape
+    mask = np.zeros((N1, N2), dtype=np.int32)
+
+    xx_flat = np.array(xx).flatten()
+    yy_flat = np.array(yy).flatten()
+
+    pts = gpd.points_from_xy(xx_flat, yy_flat, crs="EPSG:4326")
+   
+    _shp = shp.iloc[0]
+
+    #print(type(_shp)) 
+    mask = pts.within(_shp)
+    #print("Any? ", np.any(mask))
+    mask = mask.astype(np.int32).reshape((N1, N2))
+    
     return mask
 
 
@@ -44,7 +91,7 @@ def work(details):
     try:
         label = f"({dataset:s}, {region:s})"
         print(f"Doing (dataset, region) = {label:s}")
-        _mask = make_mask_with_shape(llon, llat, polygon)
+        _mask = make_mask_with_shape_new(llon, llat, polygon)
         _mask[ocn_idx] = 0
         result["output"] = _mask
         result["status"] = "OK"
@@ -75,50 +122,60 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
 
-    regions = ["CA", "sierra", "coastal", "city_LA"]
+
 
     # Region Polygon
+        
+    CA = loadShape("data/shapefiles/ca_state.zip")
 
     polygon_dict = dict( 
 
-        CA = (CA := Polygon([
-            (235.0, 42.0),
-            (240.0, 42.0),
-            (240.0, 39.0),
-            (246.0, 35.0),
-            (246.0, 32.7),
-            (235.0, 32.7),
-        ])),
+        CA = CA.intersection(CA),
+        Dam_Oroville  = CA.intersection(loadShape("data/shapefiles/OrovilleDam.zip")),
+        Dam_Shasta    = CA.intersection(loadShape("data/shapefiles/ShastaDam.zip")),
+        Dam_SevenOaks = CA.intersection(loadShape("data/shapefiles/SevenOaksDam.zip")),
+        Dam_NewMelones = CA.intersection(loadShape("data/shapefiles/NewMelonesDam.zip")),
 
-        sierra = shapely.intersection(
-            CA,
+        sierra = CA.intersection(
             Polygon([
-                ((360-122.3), 40.5),
-                ((360-100.3), 40.5),
-                ((360-100.3), 35.0),
-                ((360-119.0), 35.0),
-            ]),
+                ((-122.3), 40.5),
+                ((-100.3), 40.5),
+                ((-100.3), 35.0),
+                ((-119.0), 35.0),
+            ])
         ),
 
-        coastal = shapely.intersection(
-            CA,
+
+        coastal = CA.intersection(
             Polygon([
-                ((360-130.0), 42.0),
-                ((360-122.4), 42.0),
-                ((360-122.3), 40.5),
-                ((360-119.0), 35.0),
-                ((360-116.5), 34.2),
-                ((360-116.0), 32.2),
-                ((360-130.0), 32.2),
-            ]),
+                ((-130.0), 42.0),
+                ((-122.4), 42.0),
+                ((-122.3), 40.5),
+                ((-119.0), 35.0),
+                ((-116.5), 34.2),
+                ((-116.0), 32.2),
+                ((-130.0), 32.2),
+            ])
         ),
 
 
-        city_LA = shapely.intersection(
-            CA,
-            Point((360-118.126), 34).buffer(0.5, quad_segs=360,),
+        city_LA = CA.intersection(
+            Point((-118.0), 33.5).buffer(0.5, quad_segs=360,)
         ),
+
+        city_SF = CA.intersection(
+            Point((-122.5), 37.5).buffer(0.5, quad_segs=360,)
+        ),
+
+        city_SD = CA.intersection(
+            Point((-117.19), 32.73).buffer(0.5, quad_segs=360,)
+        ),
+
+
     )
+
+    regions = list(polygon_dict.keys())
+    #["CA", "sierra", "coastal", "city_LA"]
 
 
 
@@ -129,7 +186,7 @@ if __name__ == "__main__":
     test_da_PRISM = ds_PRISM["total_precipitation"].isel(time=0)
     ocn_idx_PRISM = np.isnan(test_da_PRISM.to_numpy())
 
-    lon_PRISM = ds_PRISM.coords["lon"].to_numpy().astype(np.float64)
+    lon_PRISM = cvt_to_np180(ds_PRISM.coords["lon"].to_numpy().astype(np.float64))
     lat_PRISM = ds_PRISM.coords["lat"].to_numpy().astype(np.float64)
 
     llat_PRISM, llon_PRISM = np.meshgrid(lat_PRISM, lon_PRISM, indexing='ij')
@@ -167,7 +224,7 @@ if __name__ == "__main__":
     ).rename("mask_ERA5").copy()
 
     lat_ERA5 = ds_ERA5.coords["latitude"]
-    lon_ERA5 = ds_ERA5.coords["longitude"] % 360
+    lon_ERA5 = cvt_to_np180(ds_ERA5.coords["longitude"])
     llat_ERA5, llon_ERA5 = np.meshgrid(lat_ERA5, lon_ERA5, indexing='ij')
 
     wgt_ERA5 = xr.apply_ufunc(np.cos, lat_ERA5*np.pi/180).rename("wgt_ERA5")
@@ -189,7 +246,7 @@ if __name__ == "__main__":
 
      
     llat_WRF = ds_WRF.coords["XLAT"]
-    llon_WRF = ds_WRF.coords["XLONG"] % 360
+    llon_WRF = cvt_to_np180(ds_WRF.coords["XLONG"])
     wgt_WRF = ds_WRF["AREA2D"].rename("wgt_WRF")
 
 
@@ -203,13 +260,13 @@ if __name__ == "__main__":
             mask = mask_WRF,
         ),
 
-        ERA5 = dict(
-            llat = llat_ERA5,
-            llon = llon_ERA5,
-            wgt  = wgt_ERA5,
-            ocn_idx = ocn_idx_ERA5,
-            mask = mask_ERA5,
-        ),
+#        ERA5 = dict(
+#            llat = llat_ERA5,
+#            llon = llon_ERA5,
+#            wgt  = wgt_ERA5,
+#            ocn_idx = ocn_idx_ERA5,
+#            mask = mask_ERA5,
+#        ),
 
         PRISM = dict(
             llat = llat_PRISM,
@@ -248,11 +305,14 @@ if __name__ == "__main__":
     with Pool(processes=args.nproc) as pool:
         results = pool.starmap(work, input_args)
         for i, result in enumerate(results):
-            
+           
+            details = result['details']
+            dataset = details['dataset'] 
+            region  = details['region'] 
             print(f'Collecting output of (dataset, region) = ({dataset:s}, {region:s}).')
             if result['status'] == 'OK':
                 
-                details = result['details']
+
                 output_mask = result['output']
                 
                 region_idx = mapping_region_to_idx[details["region"]]

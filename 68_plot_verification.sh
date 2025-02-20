@@ -9,14 +9,14 @@ verification_dir=gendata/verification_0.08deg
 mkdir -p $output_dir
 
 params=(
-    Baseline01 "BLANK" 
+    Perturb1-1  PAT00_AMP1.0
+    Baseline01  BLANK
     Perturb1-1  PAT00_AMP-1.0
 )
 
 nparams=2
 
 for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
-
     expname="${params[$(( i * $nparams + 0 ))]}"
     subgroup="${params[$(( i * $nparams + 1 ))]}"
 
@@ -35,23 +35,24 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     fi
         
     subgroup_str="_${subgroup}"
-
-    for region in city_LA CA coastal sierra ; do
-
-        input_WRF=$verification_dir/verification_WRF_${expname}${subgroup_str}.nc
-        input_ERA5=$verification_dir/verification_ERA5.nc
-        input_PRISM=$verification_dir/verification_PRISM.nc
-        output=figures/verification_${region}_${expname}${subgroup_str}.png
-
-#            --varnames total_precipitation  convective_precipitation large_scale_precipitation  \
-        python3 ./src/plot_verification.py    \
-            --input-WRF $input_WRF            \
-            --input-PRISM $input_PRISM        \
-            --varnames ACC_total_precipitation \
-            --output $output                  \
-            --region $region                  \
-            --no-display --no-legend
-    done
-
+        
+    input_WRF="$input_WRF $verification_dir/verification_WRF_${expname}${subgroup_str}.nc"
 done
+
+input_ERA5=$verification_dir/verification_ERA5.nc
+input_PRISM=$verification_dir/verification_PRISM.nc
+
+for region in city_SF city_LA CA coastal sierra Dam_Oroville Dam_Shasta Dam_SevenOaks Dam_NewMelones ; do
+
+    output=figures/verification_${region}.png
+
+    python3 ./src/plot_verification.py    \
+        --input-WRF $input_WRF            \
+        --input-PRISM $input_PRISM        \
+        --varnames ACC_total_precipitation \
+        --output $output                  \
+        --region $region                  \
+        --no-display --no-legend
+done
+
 

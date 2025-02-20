@@ -10,6 +10,8 @@ import os
 import wrf_preprocess
 import cmocean
 from pathlib import Path
+
+import multiprocessing
 from multiprocessing import Pool 
 
 def parse_ranges(input_str):
@@ -33,7 +35,7 @@ mapping = {
 
 def work(details):
 
-
+    print("Enter")
     input_dir = details["input_dir"]
     mask_file = details["mask_file"]
     mask_varname = details["mask_varname"]
@@ -49,12 +51,16 @@ def work(details):
         status="UNKNOWN",
         details = details,
     )
+    
+    print("ready")
 
     try:
 
-        ds_mask = xr.open_dataset(mask_file)
 
+        print("loading mask file: ", mask_file)
+        ds_mask = xr.open_dataset(mask_file)
         
+        print("loading wrf file")
         ds = wrf_load_helper.loadWRFDataFromDir(
             wsm, 
             input_dir,
@@ -62,20 +68,24 @@ def work(details):
             end_time = end_time,
             suffix=args.wrfout_suffix,
             avg=None,
-            verbose=True,
+            verbose=False,
             inclusive="both",
         ).sel(time=sel_time)
         
+
         if regions is not None:
             ds_mask = ds_mask.sel(region=regions)
         
         
         TTL_RAIN = (ds["RAINC"] + ds["RAINNC"]).rename("TTL_RAIN")
+
+        print("Merg")
         ds = xr.merge([ds, TTL_RAIN])
         
         #print(ds.coords["time"].to_numpy())
         verification_data_array = []
         
+        print("computing...")
         # Compute daily accumulative rainfall
         for acc_varname in ["RAINC", "RAINNC", "TTL_RAIN"]:
                
@@ -94,9 +104,21 @@ def work(details):
         #print(verification_ds)
         verification_ds_avg = verification_ds.weighted(ds_mask["wgt_WRF"] * ds_mask["mask_WRF"]).mean(dim=["south_north", "west_east"]).compute()
 
+        return_dict={
+            varname : verification_ds_avg[varname].to_numpy() for varname in list(verification_ds_avg.keys())
+        }
+            
+            
+
+
         result["status"] = "OK"
         result["data"] = verification_ds_avg
-        
+
+        ds.close()
+        ds_mask.close()
+
+        print("Done %s" % (input_dir,)) 
+       
     except Exception as e:
         
         print("Loading error. Put None.")
@@ -104,6 +126,7 @@ def work(details):
         traceback.print_exc()
 
 
+    print("Return....")
     return result
 
 
@@ -111,7 +134,9 @@ def work(details):
 
 
 if __name__ == "__main__":
-    
+   
+    multiprocessing.freeze_support()
+ 
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--input-root', type=str, help='Input directories.', required=True)
 
@@ -179,30 +204,43 @@ if __name__ == "__main__":
             regions      = args.regions,
         ),))
 
+  
+    regions = None 
+    if args.regions is None:
+        with xr.open_dataset(args.mask) as ds_test:
+            regions = ds_test.coords["region"].to_numpy().astype(str)
 
+    else:
+        regions = args.regions
 
+    output_data = np.zeros((args.lead_days, len(regions),  len(verification_varnames), len(ens_ids), ))
+    
+    print("There are %d works." % (len(input_args),))
 
-    output_data = np.zeros((args.lead_days, len(args.regions),  len(verification_varnames), len(ens_ids), ))
-
-    _time = None
     failed_ens = []
+
     with Pool(processes=args.nproc) as pool:
         results = pool.starmap(work, input_args)
+
         for i, result in enumerate(results):
+
+            print("Getting the %d-th result" % (i,))
+            
             if result['status'] == 'OK':
                
                 ens_id = result['details']['ens_id'] 
+                ds = result['data']
+
                 for k, varname in enumerate(verification_varnames):
 
                     factor = 1.0
                     if varname in ["diff_RAINNC", "diff_RAINC", "diff_TTL_RAIN"]:
                         factor = 1e-3
                     
-                    idx = ens_id_to_idx_mapping[ens_id]                    
-                    output_data[:, :, k, idx] = result['data'][varname].to_numpy() * factor
+                    idx = ens_id_to_idx_mapping[ens_id]
                     
-                    if _time is None:
-                        _time = result['data'].coords["time"]
+
+                    output_data[:, :, k, idx] = ds[varname].to_numpy() * factor
                 
             else:
                 print('!!! Failed to generate output of date %s.' % (result['details']['ens_id']))
@@ -219,10 +257,10 @@ if __name__ == "__main__":
         ),
         
         coords=dict(
-            time = _time,
+            time = [time_beg + pd.Timedelta(days=i) for i in range(args.lead_days) ],
             variable = new_varnames,
+            region = regions,
             ens_id = ens_ids,
-            region = args.regions,
         ),
     )
     
