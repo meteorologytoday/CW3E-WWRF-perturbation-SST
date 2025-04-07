@@ -65,7 +65,10 @@ if __name__ == "__main__":
     PRISM_lon = PRISM_ds["lon"].to_numpy() % 360.0
     PRISM_llat, PRISM_llon = np.meshgrid(PRISM_lat, PRISM_lon, indexing='ij')
     PRISM_lat_idx, PRISM_lon_idx, _, _ = computeBoxIndex(PRISM_llat, PRISM_llon, args.lat_rng, args.lon_rng, args.dlat, args.dlon)
-    
+   
+    lat_regrid = ( lat_regrid_bnds[1:] + lat_regrid_bnds[:-1] ) / 2
+    lon_regrid = ( lon_regrid_bnds[1:] + lon_regrid_bnds[:-1] ) / 2
+ 
     new_ds = xr.Dataset(
         data_vars = dict(
             WRF_lat_idx = (["south_north", "west_east"], WRF_lat_idx),
@@ -74,6 +77,8 @@ if __name__ == "__main__":
             PRISM_lon_idx = (["lat", "lon"], PRISM_lon_idx),
             lat_regrid_bnd = (["lat_regrid_bnd",], lat_regrid_bnds),
             lon_regrid_bnd = (["lon_regrid_bnd",], lon_regrid_bnds),
+            lat_regrid = (["lat_regrid",], lat_regrid),
+            lon_regrid = (["lon_regrid",], lon_regrid),
         ),
         coords = dict(
             XLAT = (["south_north", "west_east"], WRF_llat),

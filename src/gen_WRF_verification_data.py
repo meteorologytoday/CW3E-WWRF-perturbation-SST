@@ -139,8 +139,8 @@ if __name__ == "__main__":
  
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--input-root', type=str, help='Input directories.', required=True)
-
     parser.add_argument('--expname', type=str, help='Input directories.', required=True)
+    parser.add_argument('--group', type=str, help='Input directories.', required=True)
     parser.add_argument('--subgroup', type=str, help='Input directories.', default="BLANK")
 
     parser.add_argument('--ens-ids', type=str, help="Ens ids. Comma separated and can use range like 1-3,5,23-25", required=True)
@@ -181,17 +181,19 @@ if __name__ == "__main__":
     input_root = Path(args.input_root)
     input_args = []
     if args.subgroup == "BLANK":
-        casename = f"{args.expname:s}"
+        extra_casename = f"{args.group:s}_"
         subgroup_dir = ""
 
     else:
-        casename = f"{args.expname:s}_{args.subgroup:s}"
+        extra_casename = f"{args.group:s}_{args.subgroup:s}_"
         subgroup_dir = args.subgroup
+
+    
 
     for i, ens_id in enumerate(ens_ids):
       
         ens_id_to_idx_mapping[ens_id] = i
-        input_dir = input_root / subgroup_dir / f"{casename:s}_ens{ens_id:02d}" / "output" / "wrfout"
+        input_dir = input_root / args.group / "runs" / subgroup_dir / f"{extra_casename:s}ens{ens_id:02d}" / "output" / "wrfout"
         
         input_args.append((dict(
             ens_id       = ens_id,

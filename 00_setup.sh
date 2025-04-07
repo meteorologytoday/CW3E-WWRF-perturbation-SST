@@ -14,3 +14,6 @@ gendata_dir=./gendata
 preavg_dir=$gendata_dir/preavg
 
 mkdir -p $fig_dir
+
+
+source tools.sh

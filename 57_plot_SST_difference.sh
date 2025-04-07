@@ -3,13 +3,14 @@
 source 00_setup.sh
 source 98_trapkill.sh
     
-nproc=3
+nproc=5
 
 archive_root=/home/t2hsu/projects/project-SST-spectrum/data/cropped
 
 cropped_label=NPAC_0.1
 params=(
-    oisst OSTIA_UKMO
+    oisst GHRSST-Mean
+#    oisst OSTIA_UKMO
 )
 
 nparams=2
@@ -18,10 +19,13 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     dataset1="${params[$(( i * $nparams + 0 ))]}"
     dataset2="${params[$(( i * $nparams + 1 ))]}"
 
-    for yp in 2022P70 2022P71 2022P72 2023P00 2023P01 2023P02 2023P03 2023P04 ; do
+    for y in 2016; do
+    for p in 70 71 72; do # $( 0 17 ); do
 
+        yp=$( printf "%04dP%02d" $y $p )
+        
         echo "Doing $dataset1 - $dataset2 . yp = $yp"
-
+        
         input_file1=$archive_root/$cropped_label/sst/$dataset1/${dataset1}_cropped_sst_${yp}.nc
         input_file2=$archive_root/$cropped_label/sst/$dataset2/${dataset2}_cropped_sst_${yp}.nc
 
@@ -58,6 +62,7 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
                 proc_cnt=0
             fi
         fi
+    done
     done
 done
 

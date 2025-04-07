@@ -14,18 +14,32 @@ parser = argparse.ArgumentParser(
                     description = 'Plot prediction skill of GFS on AR.',
 )
 
-parser.add_argument('--date-rng', type=str, nargs=2, help='Input file', required=True)
+parser.add_argument('--date-selection-mode', type=str, help='Date selection mode. "date-range" will use `--date-rng`, "date-center" will use `--date-center` and `--half-window-size`', choices=["date-range", "date-center"])
+
+parser.add_argument('--date-rng', type=str, nargs=2, help='Input file', default=None)
+parser.add_argument('--date-center', type=str, help='Center day. If used, `--half-window-size` will be used.', default=None)
+parser.add_argument('--half-window-size', type=int, help='Used together with `--center-date`.', default=0)
+
 parser.add_argument('--output', type=str, help='Output file', default="")
 parser.add_argument('--lat-rng', type=float, nargs=2, help='The x axis range to be plot in km.', default=[None, None])
 parser.add_argument('--lon-rng', type=float, nargs=2, help='The x axis range to be plot in km.', default=[None, None])
+parser.add_argument('--stat', type=str, help='Sum or take the mean of the precipitation? ', choices=["sum", "mean"], required=True)
 parser.add_argument('--precip-levs', type=float, nargs="*", help='Bnds of precipitation.', default=None)
+parser.add_argument('--precip-threshold', type=float, help='Below which we replace the value with NaN.', default=0.5)
 parser.add_argument('--no-display', action="store_true")
 
 args = parser.parse_args()
 print(args)
 
-beg_dt = pd.Timestamp(args.date_rng[0])
-end_dt = pd.Timestamp(args.date_rng[1])
+if args.date_selection_mode == "date-range":
+    beg_dt = pd.Timestamp(args.date_rng[0])
+    end_dt = pd.Timestamp(args.date_rng[1])
+    
+elif args.date_selection_mode == "date-center":
+    delta_days = pd.Timedelta(days=args.half_window_size)
+    date_center = pd.Timestamp(args.date_center)
+    beg_dt = date_center - delta_days
+    end_dt = date_center + delta_days
 
 if args.precip_levs is None:
     precip_levs = np.linspace(0, 500, 21)
@@ -41,14 +55,17 @@ needed_shapes = dict(
     Dam_SevenOaks="data/shapefiles/SevenOaksDam.zip",
 )
 
-
 print("Load CA shapefile")
 shps = {
     k : gpd.read_file(v).to_crs(epsg=4326) for k, v in needed_shapes.items()
 }
 
 ds = PRISM_tools.loadDatasetWithTime(beg_dt, end_dt, inclusive="both")
-ds = ds.sum(dim="time")
+
+if args.stat == "mean":
+    ds = ds.mean(dim="time")
+elif args.stat == "sum":
+    ds = ds.sum(dim="time")
 
 
 print(ds)
@@ -131,10 +148,19 @@ fig, ax = plt.subplots(
 ax_flatten = ax.flatten()
 
 _ax = ax_flatten[0]
-mappable = _ax.contourf(lon, lat, ds["total_precipitation"], precip_levs, cmap="cmo.rain", extend="both", transform=proj_norm)
+
+precip = ds["total_precipitation"].to_numpy()
+precip[precip < args.precip_threshold] = np.nan
+
+mappable = _ax.contourf(lon, lat, precip, precip_levs, cmap="cmo.rain", extend="max", transform=proj_norm)
 cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "bottom", thickness=0.03, spacing=0.17)
 cb = plt.colorbar(mappable, cax=cax, orientation="horizontal", pad=0.00)
-cb.ax.set_xlabel("Total Precipitation [ $\\mathrm{mm}$ ]")
+
+if args.stat == "sum":
+    cb.ax.set_xlabel("Total Precipitation [ $\\mathrm{mm}$ ]")
+elif args.stat == "mean":
+    cb.ax.set_xlabel("Mean Daily Precipitation [ $\\mathrm{mm} / \\mathrm{day}$ ]")
+
 
 
 for shp_name, shp in shps.items():

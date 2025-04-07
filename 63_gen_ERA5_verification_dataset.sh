@@ -14,3 +14,7 @@ python3 src/gen_ERA5_verification_data.py \
     --test-days $verification_days    \
     --region-file $mask_file          \
     --output  $output_ERA5
+
+
+
+

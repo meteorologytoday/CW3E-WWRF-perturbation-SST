@@ -1,13 +1,8 @@
 #!/bin/bash
 
-if [ "$1" == "" ]; then
-    echo "Error: Need to provide an argument as the input configuration file."
-    exit 1
-fi
-config_file="$1"
-echo "Configuration file: $config_file"
-source $config_file
+source 60_verification_setup.sh
 
+mkdir -p $output_dir
 
 python3 src/gen_PRISM_verification_data.py \
     --date-beg $verification_date_beg \

@@ -1,35 +1,35 @@
 #!/bin/bash
 
 
-label=AR2023JAN
-
-verification_date_beg="2023-01-01T00:00:00"
+naming_style=v2
 verification_days=10
+WRF_archived_root=/expanse/lustre/scratch/t2hsu/temp_project/CW3E_WRF_RUNS/0.08deg
+
+
+if [ "$1" == "" ]; then
+    echo "Error: Need to provide an argument as the input configuration file."
+    exit 1
+fi
+config_file="$1"
+echo "Sourcing config file: $config_file"
+source $config_file
+
+
+if [ "$label" == "" ]; then
+    echo "Error: Loading config failed. Variable `label` is still empty."
+fi 
+
 mask_file=gendata/mask.nc
 
-output_dir=gendata/verification_0.08deg
-output_ERA5=$output_dir/verification_ERA5.nc
+output_dir=gendata/$label
 output_PRISM=$output_dir/verification_PRISM.nc
-
-# ===== WRF setting =====
-#WRF_archived_root=/expanse/lustre/scratch/t2hsu/temp_project/PROCESSED_CW3E_WRF_RUNS/0.08deg
-WRF_archived_root=/expanse/lustre/scratch/t2hsu/temp_project/CW3E_WRF_RUNS/0.08deg
-WRF_params=(
-#    Baseline01 "BLANK" 
-    Perturb1-1  PAT00_AMP1.0
-#    Perturb1-1  PAT00_AMP-1.0
-)
+output_CRPS_dir=$output_dir/CRPS
+output_ens_stat_dir=$output_dir/ens_stat
 
 exp_beg_time=$verification_date_beg
 wrfout_data_interval=$(( 3600 * 24 ))
 frames_per_wrfout_file=1
-#ens_ids="0-16,18,21,22,24-30"
-ens_ids="0-30"
-#ens_ids="0-5"
 
 
-
-
-
-
-
+expname=$label
+mkdir -p $output_dir

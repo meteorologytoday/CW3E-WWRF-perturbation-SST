@@ -114,13 +114,24 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process some integers.')
      
-    parser.add_argument('--test-ERA5-file', type=str, required=True)
-    parser.add_argument('--test-WRF-file', type=str, required=True)
-    parser.add_argument('--test-PRISM-file', type=str, required=True)
+    parser.add_argument('--test-ERA5-file', type=str, default=None)
+    parser.add_argument('--test-WRF-file', type=str, default=None)
+    parser.add_argument('--test-PRISM-file', type=str, default=None)
     parser.add_argument('--output', type=str, required=True)
     parser.add_argument('--nproc', type=int, default=1)
     args = parser.parse_args()
     print(args)
+
+
+    model_has_file = { model : getattr(args, "test_%s_file" % (model,)) is not None for model in ["ERA5", "WRF", "PRISM"] }
+
+    if np.all( [ (not has_file) for _, has_file in model_has_file.items() ] ) :
+
+        raise Exception("You need to provide at least input file of one model.")
+        
+    for model, has_file in model_has_file.items():
+        
+        print("Doing model %s? %s" % (model, "Yes" if has_file else "No")) 
 
 
 
@@ -158,6 +169,25 @@ if __name__ == "__main__":
             ])
         ),
 
+        north_CA = CA.intersection(
+            Polygon([
+                ((-130.0), 55.0),
+                ((-100.0), 55.0),
+                ((-100.0), 35.0),
+                ((-130.0), 35.0),
+            ])
+        ),
+
+
+        south_CA = CA.intersection(
+            Polygon([
+                ((-130.0), 35.0),
+                ((-100.0), 35.0),
+                ((-100.0), 20.0),
+                ((-130.0), 20.0),
+            ])
+        ),
+
 
         city_LA = CA.intersection(
             Point((-118.0), 33.5).buffer(0.5, quad_segs=360,)
@@ -172,6 +202,7 @@ if __name__ == "__main__":
         ),
 
 
+
     )
 
     regions = list(polygon_dict.keys())
@@ -179,106 +210,107 @@ if __name__ == "__main__":
 
 
 
+    infos = dict()
+
+
     # === PRISM ===
+    if model_has_file["PRISM"]:
+        ds_PRISM = xr.open_dataset(args.test_PRISM_file)
 
-    ds_PRISM = xr.open_dataset(args.test_PRISM_file)
+        test_da_PRISM = ds_PRISM["total_precipitation"].isel(time=0)
+        ocn_idx_PRISM = np.isnan(test_da_PRISM.to_numpy())
 
-    test_da_PRISM = ds_PRISM["total_precipitation"].isel(time=0)
-    ocn_idx_PRISM = np.isnan(test_da_PRISM.to_numpy())
+        lon_PRISM = cvt_to_np180(ds_PRISM.coords["lon"].to_numpy().astype(np.float64))
+        lat_PRISM = ds_PRISM.coords["lat"].to_numpy().astype(np.float64)
 
-    lon_PRISM = cvt_to_np180(ds_PRISM.coords["lon"].to_numpy().astype(np.float64))
-    lat_PRISM = ds_PRISM.coords["lat"].to_numpy().astype(np.float64)
+        llat_PRISM, llon_PRISM = np.meshgrid(lat_PRISM, lon_PRISM, indexing='ij')
 
-    llat_PRISM, llon_PRISM = np.meshgrid(lat_PRISM, lon_PRISM, indexing='ij')
+        mask_PRISM = xr.DataArray(
+            data = np.zeros_like(llat_PRISM, dtype=np.int32),
+            dims = ["lat_PRISM", "lon_PRISM"],
+            coords = dict(
+                lon_PRISM=(["lon_PRISM"], lon_PRISM),
+                lat_PRISM=(["lat_PRISM"], lat_PRISM),
+            ),
+        )
 
-    mask_PRISM = xr.DataArray(
-        data = np.zeros_like(llat_PRISM, dtype=np.int32),
-        dims = ["lat_PRISM", "lon_PRISM"],
-        coords = dict(
-            lon_PRISM=(["lon_PRISM"], lon_PRISM),
-            lat_PRISM=(["lat_PRISM"], lat_PRISM),
-        ),
-    )
+        wgt_PRISM = mask_PRISM.copy().astype(np.float64).rename("wgt_PRISM")
+        wgt_PRISM[:, :] = np.cos(llat_PRISM * np.pi/180.0)
 
-    wgt_PRISM = mask_PRISM.copy().astype(np.float64).rename("wgt_PRISM")
-    wgt_PRISM[:, :] = np.cos(llat_PRISM * np.pi/180.0)
+        mask_PRISM = mask_PRISM.expand_dims(
+            dim = dict(region=regions),
+            axis=0,
+        ).rename("mask_PRISM").copy()
 
-    mask_PRISM = mask_PRISM.expand_dims(
-        dim = dict(region=regions),
-        axis=0,
-    ).rename("mask_PRISM").copy()
-
-
-    # === ERA5 ====
-    ds_ERA5 = xr.open_dataset(args.test_ERA5_file)
-    test_da_ERA5 = ds_ERA5["sst"].isel(time=0)
-
-    full_mask_ERA5 = xr.ones_like(test_da_ERA5).astype(int)
-    lnd_idx_ERA5 = np.isnan(test_da_ERA5.to_numpy())
-    ocn_idx_ERA5 = np.isfinite(test_da_ERA5.to_numpy())
-
-    # Copy is necessary so that the value can be assigned later
-    mask_ERA5 = xr.zeros_like(full_mask_ERA5).expand_dims(
-        dim = dict(region=regions),
-        axis=0,
-    ).rename("mask_ERA5").copy()
-
-    lat_ERA5 = ds_ERA5.coords["latitude"]
-    lon_ERA5 = cvt_to_np180(ds_ERA5.coords["longitude"])
-    llat_ERA5, llon_ERA5 = np.meshgrid(lat_ERA5, lon_ERA5, indexing='ij')
-
-    wgt_ERA5 = xr.apply_ufunc(np.cos, lat_ERA5*np.pi/180).rename("wgt_ERA5")
-
-    # === WRF ====
-    ds_WRF = xr.open_dataset(args.test_WRF_file).isel(Time=0)
-
-    full_mask_WRF = xr.ones_like(ds_WRF["SST"]).astype(int)
-    lnd_mask_WRF = ds_WRF["LANDMASK"].to_numpy()
-    lnd_idx_WRF = lnd_mask_WRF == 1
-    ocn_idx_WRF = lnd_mask_WRF == 0
-
-
-    # Copy is necessary so that the value can be assigned later
-    mask_WRF = xr.zeros_like(full_mask_WRF).expand_dims(
-        dim = dict(region=regions),
-        axis=0,
-    ).rename("mask_WRF").copy()
-
-     
-    llat_WRF = ds_WRF.coords["XLAT"]
-    llon_WRF = cvt_to_np180(ds_WRF.coords["XLONG"])
-    wgt_WRF = ds_WRF["AREA2D"].rename("wgt_WRF")
-
-
-    infos = dict(
-
-        WRF = dict(
-            llat = llat_WRF,
-            llon = llon_WRF,
-            wgt  = wgt_WRF,
-            ocn_idx = ocn_idx_WRF,
-            mask = mask_WRF,
-        ),
-
-#        ERA5 = dict(
-#            llat = llat_ERA5,
-#            llon = llon_ERA5,
-#            wgt  = wgt_ERA5,
-#            ocn_idx = ocn_idx_ERA5,
-#            mask = mask_ERA5,
-#        ),
-
-        PRISM = dict(
+        infos["PRISM"] = dict(
             llat = llat_PRISM,
             llon = llon_PRISM,
             wgt  = wgt_PRISM,
             ocn_idx = ocn_idx_PRISM,
             mask = mask_PRISM,
-        ),
-    )
+        )
+
+
+    # === ERA5 ====
+    if model_has_file["ERA5"]:
+        ds_ERA5 = xr.open_dataset(args.test_ERA5_file)
+        test_da_ERA5 = ds_ERA5["sst"].isel(time=0)
+
+        full_mask_ERA5 = xr.ones_like(test_da_ERA5).astype(int)
+        lnd_idx_ERA5 = np.isnan(test_da_ERA5.to_numpy())
+        ocn_idx_ERA5 = np.isfinite(test_da_ERA5.to_numpy())
+
+        # Copy is necessary so that the value can be assigned later
+        mask_ERA5 = xr.zeros_like(full_mask_ERA5).expand_dims(
+            dim = dict(region=regions),
+            axis=0,
+        ).rename("mask_ERA5").copy()
+
+        lat_ERA5 = ds_ERA5.coords["latitude"]
+        lon_ERA5 = cvt_to_np180(ds_ERA5.coords["longitude"])
+        llat_ERA5, llon_ERA5 = np.meshgrid(lat_ERA5, lon_ERA5, indexing='ij')
+
+        wgt_ERA5 = xr.apply_ufunc(np.cos, lat_ERA5*np.pi/180).rename("wgt_ERA5")
+
+        infos["ERA5"] = dict(
+            llat = llat_ERA5,
+            llon = llon_ERA5,
+            wgt  = wgt_ERA5,
+            ocn_idx = ocn_idx_ERA5,
+            mask = mask_ERA5,
+        )
+
+    # === WRF ====
+    if model_has_file["WRF"]:
+        ds_WRF = xr.open_dataset(args.test_WRF_file).isel(Time=0)
+
+        full_mask_WRF = xr.ones_like(ds_WRF["SST"]).astype(int)
+        lnd_mask_WRF = ds_WRF["LANDMASK"].to_numpy()
+        lnd_idx_WRF = lnd_mask_WRF == 1
+        ocn_idx_WRF = lnd_mask_WRF == 0
+
+
+        # Copy is necessary so that the value can be assigned later
+        mask_WRF = xr.zeros_like(full_mask_WRF).expand_dims(
+            dim = dict(region=regions),
+            axis=0,
+        ).rename("mask_WRF").copy()
+
+         
+        llat_WRF = ds_WRF.coords["XLAT"]
+        llon_WRF = cvt_to_np180(ds_WRF.coords["XLONG"])
+        wgt_WRF = ds_WRF["AREA2D"].rename("wgt_WRF")
+
+        infos["WRF"] = dict(
+            llat = llat_WRF,
+            llon = llon_WRF,
+            wgt  = wgt_WRF,
+            ocn_idx = ocn_idx_WRF,
+            mask = mask_WRF,
+        )
+
 
     output_datasets = infos.keys()
-    #output_datasets = ["ERA5", "PRISM"]
     mapping_region_to_idx = { region : i for i, region in enumerate(regions) }
 
 
