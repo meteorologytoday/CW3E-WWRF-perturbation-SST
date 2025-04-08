@@ -1,13 +1,13 @@
 #!/bin/bash
 
-nproc=1
+nproc=10
  
 source 60_verification_setup.sh
 source 98_trapkill.sh
 
-wrfout_data_interval=$(( 3600 * 6 ))
+wrfout_data_interval=$(( 3600 * 12 ))
 
-varnames="PSFC TTL_RAIN SSTSK T2 IVT"
+varnames="PSFC TTL_RAIN SST T2 IVT SSTSK"
 
 
 nparams=3
@@ -16,14 +16,14 @@ for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
     expname="${WRF_params[$(( i * $nparams + 0 ))]}"
     group="${WRF_params[$(( i * $nparams + 1 ))]}"
     subgroup="${WRF_params[$(( i * $nparams + 2 ))]}"
-
+    
     echo ":: expname = $expname"
     echo ":: group   = $group"
     echo ":: subgroup = $subgroup"
- 
+    
     input_WRF_root=$WRF_archived_root
     output_root=$output_ens_stat_dir
-
+    
     python3 src/gen_ensemble_analysis.py                 \
         --nproc $nproc                                   \
         --regrid-file $regrid_file                       \

@@ -17,13 +17,12 @@ regrid_file=gendata/regrid_idx.nc
 
 
 # ===== WRF setting =====
-WRF_archived_root=/expanse/lustre/scratch/t2hsu/temp_project/PROCESSED_CW3E_WRF_RUNS/0.08deg
+WRF_archived_root=./data/PROCESSED_CW3E_WRF_RUNS/0.08deg
 #WRF_archived_root=/expanse/lustre/scratch/t2hsu/temp_project/CW3E_WRF_RUNS/0.08deg
 WRF_params=(
 #    $label  "Baseline01" "BLANK"
-    $label  "Perturb1-1"   "PAT00_AMP-1.0"
     $label  "Perturb1-1"   "PAT00_AMP1.0"
-
+    $label  "Perturb1-1"   "PAT00_AMP-1.0"
 )
 
 exp_beg_time=$verification_date_beg

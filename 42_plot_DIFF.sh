@@ -1,8 +1,10 @@
 #!/bin/bash
 
 source 00_setup.sh
+        
+varnames=( SST TTL_RAIN PSFC IVT )
 
-nproc=2
+nproc=10
 
 source 60_verification_setup.sh    
 
@@ -43,21 +45,22 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
 
     time_beg=0
     time_end=240
-    time_stride=6
+    time_stride=12
     python3 ./src/plot_ensemble_comparison.py    \
         --input-root $input_root             \
         --output-root $output_root           \
         --expnames $expname $expname         \
         --groups $group1 $group2             \
         --subgroup $subgroup1 $subgroup2     \
-        --varnames SST TTL_RAIN PSFC IVT     \
+        --varnames ${varnames[@]}            \
         --exp-beg-time $exp_beg_time         \
         --time-beg $time_beg \
         --time-end $time_end \
         --time-stride $time_stride \
         --lat-rng 10 70                      \
         --lon-rng $(( 360 - 179 )) $(( 360 - 105 ))           \
-        --extension png \
+        --pval 0.1 \
+        --extension png                                   \
         --nproc $nproc 
 
 done

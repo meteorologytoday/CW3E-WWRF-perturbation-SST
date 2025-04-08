@@ -56,10 +56,9 @@ plot_infos = dict(
     TTL_RAIN = dict(
         selector = None,
         full = dict(levs=np.arange(0, 100, 5), cmap=cmocean.cm.rain),
-        anom = dict(levs=np.linspace(-1, 1, 21) * 5, cmap=cmocean.cm.balance),
+        anom = dict(levs=np.linspace(-1, 1, 11) * 15, cmap=cmocean.cm.balance),
         label = "$ \\mathrm{ACC}_{\\mathrm{ttl}}$",
         unit = "mm",
-        levs = np.linspace(-1, 1, 11) * 50,
         cmap = cmocean.cm.balance,
     ), 
 
@@ -72,7 +71,18 @@ plot_infos = dict(
         offset = 273.15,
         levs = np.linspace(-1, 1, 11) * 2,
         cmap = cmocean.cm.balance,
-    ), 
+    ),
+ 
+    SSTSK = dict(
+        selector = None,
+        full = dict(levs=np.arange(0, 30, 5), cmap=cmocean.cm.rain),
+        anom = dict(levs=np.linspace(-1, 1, 21) * 2, cmap=cmocean.cm.balance),
+        label = "SSTSK",
+        unit = "K",
+        offset = 273.15,
+        levs = np.linspace(-1, 1, 11) * 2,
+        cmap = cmocean.cm.balance,
+    ),
 
     T2 = dict(
         selector = None,
@@ -88,8 +98,8 @@ plot_infos = dict(
 
     IVT = dict(
         selector = None,
-        full = dict(levs=np.arange(0, 850, 50), cmap=cmocean.cm.rain),
-        anom = dict(levs=np.linspace(-1, 1, 21) * 30, cmap=cmocean.cm.balance),
+        full = dict(levs=np.arange(0, 850, 50), cmap=cmocean.cm.rain, markerlevs=[500.0]),
+        anom = dict(levs=np.linspace(-1, 1, 11) * 50, cmap=cmocean.cm.balance),
         label = "IVT",
         unit = "$\\mathrm{kg} / \\mathrm{m} / \\mathrm{s} $",
         levs = np.linspace(-1, 1, 11) * 50,
@@ -220,6 +230,8 @@ def doJob(details, detect_phase=False):
         expnames        = details["expnames"]
         groups          = details["groups"]
         subgroups       = details["subgroups"]
+        
+        pval       = details["pval"]
 
 
         exp_beg_time    = pd.Timestamp(details["exp_beg_time"])
@@ -361,10 +373,12 @@ def doJob(details, detect_phase=False):
                 lon = _da_ref.coords["lon"] % 360
                 
                 if is_ref:
-
+            
+                    markerlevs = testIfIn(plot_info["full"], "markerlevs", None) 
+                    _data_plot = ( _da.sel(stat="mean").to_numpy() - offset) / factor
                     mappable = _ax.contourf(
                         lon, lat,
-                        ( _da.sel(stat="mean").to_numpy() - offset) / factor,
+                        _data_plot,
                         plot_info["full"]["levs"],
                         cmap=plot_info["full"]["cmap"],
                         transform=proj,
@@ -375,8 +389,15 @@ def doJob(details, detect_phase=False):
                     cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
                     cb.ax.set_ylabel("[ %s ]" % (plot_info["unit"],))
 
-
-
+                    if markerlevs is not None:
+                        cs = _ax.contour(
+                            lon, lat,
+                            _data_plot,
+                            markerlevs,
+                            transform=proj,
+                            colors="yellow",
+                        )
+     
                     #plot_hatch(_ax, lon, lat, rel_CRPS, 0.2, hatch="..")
                     #plot_hatch(_ax, lon, lat, -rel_CRPS, 0.2, hatch="//")
                     
@@ -413,7 +434,7 @@ def doJob(details, detect_phase=False):
 
                     _ax.set_title("Diff %s" % (plot_info["label"],))
         
-                    plot_hatch(_ax, lon, lat, pval_test.pvalue, 0.1, hatch=".")
+                    plot_hatch(_ax, lon, lat, pval_test.pvalue, pval, hatch=".")
                     
         for __ax in ax.flatten(): 
 
@@ -445,7 +466,8 @@ def doJob(details, detect_phase=False):
                 )
             """
 
-        fig.suptitle("Time: %s" % (
+        fig.suptitle("[pval=%.1f] Time: %s" % (
+            args.pval,
             plot_time.strftime("%Y/%m/%d %H:%M:%S"),
         ))
         
@@ -488,6 +510,7 @@ if __name__ == "__main__":
     parser.add_argument('--lat-rng', type=float, nargs=2, help="Latitude range for plotting", default=[-90.0, 90.0])
     parser.add_argument('--lon-rng', type=float, nargs=2, help="Latitude range for plotting", default=[0.0, 360.0])
     parser.add_argument('--nproc', type=int, help="Number of processors", default=1)
+    parser.add_argument('--pval', type=float, help="p-value", default=0.1)
     
     
     args = parser.parse_args()
@@ -533,6 +556,7 @@ if __name__ == "__main__":
             exp_beg_time = args.exp_beg_time,
             plot_rel_time = plot_rel_time,
             output_root = args.output_root,
+            pval = args.pval,
         )
 
         print("[Detect] Checking hour=%d" % (plot_rel_time,))
