@@ -229,7 +229,6 @@ def doJob(details, detect_phase=False):
         input_root      = Path(details["input_root"])
         expnames        = details["expnames"]
         groups          = details["groups"]
-        subgroups       = details["subgroups"]
         
         pval       = details["pval"]
 
@@ -241,11 +240,11 @@ def doJob(details, detect_phase=False):
 
         plot_time = exp_beg_time + plot_rel_time
 
-        iter_obj = list(zip(expnames, groups, subgroups))
+        iter_obj = list(zip(expnames, groups))
 
         full_names = []
-        for expname, group, subgroup in iter_obj:
-            full_names.append(f"{expname:s}-{group:s}-{subgroup}") 
+        for expname, group in iter_obj:
+            full_names.append(f"{expname:s}-{group:s}") 
 
         output_file = output_root / "-".join(full_names) / "{varname:s}_{plot_time:s}.{ext:s}".format(
             varname = ",".join(varnames),
@@ -278,9 +277,9 @@ def doJob(details, detect_phase=False):
         for varname in varnames:
             
             tmp = []
-            for expname, group, subgroup in iter_obj:
+            for expname, group in iter_obj:
 
-                load_file = input_root / expname / group / subgroup / "{varname:s}-{time:s}.nc".format(
+                load_file = input_root / expname / group / "{varname:s}-{time:s}.nc".format(
                     varname = varname,
                     time = plot_time.strftime("%Y-%m-%dT%H:%M:%S"),
                 )
@@ -498,7 +497,6 @@ if __name__ == "__main__":
     parser.add_argument('--extension', type=str, help='analysis beg time', default="svg")
     parser.add_argument('--expnames',  type=str, nargs="+", help='Input directories.', required=True)
     parser.add_argument('--groups',    type=str, nargs="+", help='Input directories.', required=True)
-    parser.add_argument('--subgroups', type=str, nargs="+", help='Input directories.', required=True)
     
     parser.add_argument('--varnames',  type=str, nargs="+", help='Input directories.', required=True)
 
@@ -518,8 +516,8 @@ if __name__ == "__main__":
     print(args)
     
     # Check length
-    if len(args.expnames) != len(args.groups) or len(args.expnames) != len(args.subgroups):
-        raise Exception("Error: lengths of `--expnames`, `--groups`, `--subgroups` do not match.")
+    if len(args.expnames) != len(args.groups):
+        raise Exception("Error: lengths of `--expnames`, `--groups`, do not match.")
    
     """ 
     needed_shapes = dict(
@@ -552,7 +550,6 @@ if __name__ == "__main__":
             input_root = args.input_root,
             expnames   = args.expnames,
             groups     = args.groups,
-            subgroups  = args.subgroups,
             exp_beg_time = args.exp_beg_time,
             plot_rel_time = plot_rel_time,
             output_root = args.output_root,

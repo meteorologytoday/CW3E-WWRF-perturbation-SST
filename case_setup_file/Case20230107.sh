@@ -1,9 +1,9 @@
 #!/bin/bash
 
 
-label=exp_20230101
+label=exp_20230107
 
-verification_date_beg="2023-01-01T00:00:00"
+verification_date_beg="2023-01-07T00:00:00"
 verification_days=10
 mask_file=gendata/mask.nc
 
@@ -21,8 +21,8 @@ WRF_archived_root=./data/PROCESSED_CW3E_WRF_RUNS/0.08deg
 #WRF_archived_root=/expanse/lustre/scratch/t2hsu/temp_project/CW3E_WRF_RUNS/0.08deg
 WRF_params=(
 #    $label  "Baseline01" "BLANK"
-    $label  "PAT00_AMP1.0"
     $label  "PAT00_AMP-1.0"
+    $label  "PAT00_AMP1.0"
 )
 
 exp_beg_time=$verification_date_beg
@@ -33,10 +33,4 @@ ens_ids="0-30"
 #ens_ids="2-6,8,15-20,22-30"
 #ens_ids="2-6,22-30"
 #ens_ids="2-6"
-
-
-naming_style=v1
-
-
-
 

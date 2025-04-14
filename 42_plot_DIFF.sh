@@ -11,30 +11,25 @@ source 60_verification_setup.sh
 if [ "$expname" = "exp_20230101" ] ; then
 
     params=(
-        Perturb1-1  PAT00_AMP-1.0    Perturb1-1  PAT00_AMP1.0
+        PAT00_AMP-1.0 PAT00_AMP1.0
     )
+
 else
 
     params=(
-        Perturb1  PAT00_AMP1.0    Perturb1  PAT00_AMP-1.0
+        PAT00_AMP1.0 PAT00_AMP-1.0
     )
 
 fi
 
-nparams=4
+nparams=2
 for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     
     group1="${params[$(( i * $nparams  + 0 ))]}"
-    subgroup1="${params[$(( i * $nparams + 1 ))]}"
-    
-    group2="${params[$(( i * $nparams  + 2 ))]}"
-    subgroup2="${params[$(( i * $nparams + 3 ))]}"
+    group2="${params[$(( i * $nparams  + 1 ))]}"
     
     echo ":: group1  = $group1"
-    echo ":: subgroup1 = $subgroup1"
-    
     echo ":: group2  = $group2"
-    echo ":: subgroup2 = $subgroup2"
     
     day_beg=0
     day_end=9
@@ -51,7 +46,6 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
         --output-root $output_root           \
         --expnames $expname $expname         \
         --groups $group1 $group2             \
-        --subgroup $subgroup1 $subgroup2     \
         --varnames ${varnames[@]}            \
         --exp-beg-time $exp_beg_time         \
         --time-beg $time_beg \

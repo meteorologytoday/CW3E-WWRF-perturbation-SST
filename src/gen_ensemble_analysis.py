@@ -20,6 +20,28 @@ import cmocean
 from scipy import sparse
 import WRF_ens_tools
 
+import re
+
+def parseVarname(varname_long):
+    
+    m = re.match(r'(?P<varname>\w+)(::(?P<level>[0-9]+))?', varname_long)
+
+    varname = None
+    level = None
+    if m:
+        
+        d = m.groupdict()
+        print("GROUPDICT: ", d)
+        varname = d["varname"]
+        level = d["level"]
+        if level is not None:
+            level = int(level)
+        
+    else:
+        raise Exception("Varname %s cannot be parsed. ") 
+
+    return varname, level
+
 def parse_ranges(input_str):
     numbers = []
     for part in input_str.split(','):
@@ -125,10 +147,10 @@ def doJob(details, detect_phase=False):
     try:
         
         varname         = details["varname"]
+        level           = details["level"]
         input_WRF_root  = Path(details["input_WRF_root"])
         expname         = details["expname"]
         group           = details["group"]
-        subgroup        = details["subgroup"]
         ens_ids         = details["ens_ids"]
         target_hour     = details["target_hour"]
         exp_beg_time    = details["exp_beg_time"]
@@ -142,10 +164,8 @@ def doJob(details, detect_phase=False):
         wrfout_data_interval = pd.Timedelta(seconds=wrfout_data_interval)
         target_time = exp_beg_time + pd.Timedelta(hours=target_hour)
 
-        full_group_name = f"{group:s}_{subgroup:s}"
-
         # Detecting
-        output_file = WRF_ens_tools.genEnsStatFilename(expname, group, subgroup, varname, target_time, root=output_root)
+        output_file = WRF_ens_tools.genEnsStatFilename(expname, group, varname, target_time, root=output_root, level=level)
         result["output_file"] = output_file
         # First round is just to decide which files
         # to be processed to enhance parallel job 
@@ -195,9 +215,7 @@ def doJob(details, detect_phase=False):
             input_WRF_dir = WRF_ens_tools.genWRFEnsRelPathDir(
                 expname = expname,
                 group = group,
-                subgroup = subgroup,
                 ens_id = ens_id,
-                style = "v1",
                 root = input_WRF_root 
             )
             
@@ -210,6 +228,7 @@ def doJob(details, detect_phase=False):
              
             ens_id = ens_ids[i]
             print("Loading the %d-th wrf dir: %s, ens_id=%d" % (i, input_WRF_dir, ens_id))
+
             ds = wrf_load_helper.loadWRFDataFromDir(
                 wsm, 
                 input_WRF_dir,
@@ -222,12 +241,29 @@ def doJob(details, detect_phase=False):
                 drop_latlon_time_dependency = True,
             )
 
-            if varname == "TTL_RAIN":
+            if level is not None:
+                ds = ds.sel(pressure=level)
+
+            if varname == "WND":
+                #U_U = ds["U"].to_numpy()
+                #V_V = ds["V"].to_numpy()
+                
+                #U = xr.zeros_like(ds["PH"])
+                #V = xr.zeros_like(ds["PH"])
+                
+                #U.data[:, :, :] = (U_U[:, :, 1:] + U_U[:, :, :-1]) / 2
+                #V.data[:, :, :] = (V_V[:, :, 1:] + V_V[:, :, :-1]) / 2
+                
+                
+                da = ((ds["U"]**2 + ds["V"]**2)**0.5).rename("WND")
+
+            elif varname == "TTL_RAIN":
                 da = ds["RAINNC"] + ds["RAINC"]
                 da = da.rename("TTL_RAIN")
             else:
                 da = ds[varname]
-
+            
+            
             _data = da.to_numpy()
             #print(_data.shape)
 
@@ -282,10 +318,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('--input-WRF-root', type=str, help='Input directories.', required=True)
-    parser.add_argument('--naming-style', type=str, help='Input directories.', default="v1")
     parser.add_argument('--expname', type=str, help='Input directories.', required=True)
     parser.add_argument('--group', type=str, help='Input directories.', required=True)
-    parser.add_argument('--subgroup', type=str, help='Input directories.', default="BLANK")
     parser.add_argument('--ens-ids', type=str, help="Ens ids. Comma separated and can use range like 1-3,5,23-25", required=True)
     
     parser.add_argument('--varnames', type=str, nargs="+", help='Variables processed. If only a particular layer is selected, use `-` to separate the specified layer. Example: PH-850', required=True)
@@ -320,16 +354,22 @@ if __name__ == "__main__":
     failed_dates = []
     input_args = []
 
-    for varname in args.varnames:
+    for long_varname in args.varnames:
+        
+        varname, level = parseVarname(long_varname)
+        
+        print("Full varname: %s" % (long_varname,))
+        print("Parsed varname: %s" % (varname,))
+        print("Parsed level: %s" % ( "%d" % level if level is not None else "N/A") )
         
         for target_hour in range(args.output_time_range[0], args.output_time_range[1]+1, stepping_hour):
         
             details = dict(
                 varname = varname,
+                level   = level,
                 input_WRF_root = args.input_WRF_root,
                 expname = args.expname,
                 group = args.group,
-                subgroup = args.subgroup,
                 ens_ids = ens_ids,
                 target_hour = target_hour,
                 exp_beg_time = args.exp_beg_time,

@@ -14,39 +14,22 @@ def parseRanges(input_str):
     return numbers
 
 
-def genWRFEnsRelPathDir(expname, group, subgroup, ens_id, style="v1", root="."):
+def genWRFEnsRelPathDir(expname, group, ens_id, root="."):
     
-    root = Path(root)
-
-    if subgroup == "BLANK":
-        extra_casename = f"{group:s}_"
-        subgroup_dir = ""
-
-    else:
-        extra_casename = f"{group:s}_{subgroup:s}_"
-        subgroup_dir = subgroup
-
-    if style == "v1":
-        result_dir = root / expname / group / "runs" / subgroup_dir / f"{extra_casename:s}ens{ens_id:02d}" / "output" / "wrfout"
-        
-    elif style == "v2":
-        result_dir = root / expname / group / "runs" / subgroup_dir / f"ens{ens_id:02d}" / "output" / "wrfout"
-    
-    else:
-        raise Exception("Unknown style `%s`" % (style,))
- 
+    result_dir = Path(root) / expname / "runs" / group / f"{ens_id:02d}" / "output" / "wrfout"
 
     return result_dir
 
-def genEnsStatFilename(expname, group, subgroup, varname, dt, root="."):
+def genEnsStatFilename(expname, group, varname, dt, root=".", level=None):
 
     root = Path(root)
-    full_group_name = f"{group:s}_{subgroup:s}" 
     
     # Detecting
-    output_file = root / expname / group / subgroup / ("{varname:s}-{time:s}.nc".format(
+    output_file = root / expname / group / ("{varname:s}{level:s}-{time:s}.nc".format(
         varname = varname,
+        level = "" if level is None else "::%d" % level,
         time = dt.strftime("%Y-%m-%dT%H:%M:%S"),
     ))
 
-    return output_file      
+    return output_file     
+
