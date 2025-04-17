@@ -2,9 +2,12 @@
 
 source 00_setup.sh
         
-varnames=( SST TTL_RAIN PSFC IVT )
+#varnames=( SST TTL_RAIN PSFC IVT )
+#varnames=(  IWV WND::850 IVT TTL_RAIN SST )
+varnames=(  TTL_RAIN  )
+#varnames=(  PH::850 PSFC SST )
 
-nproc=10
+nproc=1
 
 source 60_verification_setup.sh    
 
@@ -31,21 +34,19 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     echo ":: group1  = $group1"
     echo ":: group2  = $group2"
     
-    day_beg=0
-    day_end=9
-
-    input_root=$output_ens_stat_dir
+    input_root=$output_wrf_regrid_dir
     output_root=$fig_dir/ens_compare
     mkdir -p $output_root
 
     time_beg=0
-    time_end=240
-    time_stride=12
-    python3 ./src/plot_ensemble_comparison.py    \
+    time_end=246
+    time_stride=6
+    python3 ./src/plot_ensemble_diff_stat.py \
         --input-root $input_root             \
         --output-root $output_root           \
         --expnames $expname $expname         \
         --groups $group1 $group2             \
+        --ens-ids $ens_ids                   \
         --varnames ${varnames[@]}            \
         --exp-beg-time $exp_beg_time         \
         --time-beg $time_beg \
@@ -55,6 +56,7 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
         --lon-rng $(( 360 - 179 )) $(( 360 - 105 ))           \
         --pval 0.1 \
         --extension png                                   \
+        --plot-quartile \
         --nproc $nproc 
 
 done

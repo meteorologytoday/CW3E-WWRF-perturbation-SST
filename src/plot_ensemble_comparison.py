@@ -16,6 +16,7 @@ import CRPS_tools
 import geopandas as gpd
 import WRF_ens_tools
 from pathlib import Path
+import re
 
 print("Loading Plotting Modules: Matplotlib and Cartopy.")
 import matplotlib as mpl
@@ -42,9 +43,9 @@ def testIfIn(di, key, default):
     return di[key] if (key in di) else default
 
 
-plot_infos = dict(
+plot_infos = {
 
-    PSFC = dict(
+    "PSFC" : dict(
         selector = None,
         full = dict(levs=np.arange(950, 1050, 5), cmap="rainbow"),
         anom = dict(levs=np.linspace(-1, 1, 21) * 2, cmap=cmocean.cm.balance),
@@ -53,7 +54,7 @@ plot_infos = dict(
         factor = 1e2,
     ), 
 
-    TTL_RAIN = dict(
+    "TTL_RAIN" : dict(
         selector = None,
         full = dict(levs=np.arange(0, 100, 5), cmap=cmocean.cm.rain),
         anom = dict(levs=np.linspace(-1, 1, 11) * 15, cmap=cmocean.cm.balance),
@@ -62,7 +63,7 @@ plot_infos = dict(
         cmap = cmocean.cm.balance,
     ), 
 
-    SST = dict(
+    "SST" : dict(
         selector = None,
         full = dict(levs=np.arange(0, 30, 5), cmap=cmocean.cm.rain),
         anom = dict(levs=np.linspace(-1, 1, 21) * 2, cmap=cmocean.cm.balance),
@@ -73,18 +74,7 @@ plot_infos = dict(
         cmap = cmocean.cm.balance,
     ),
  
-    SSTSK = dict(
-        selector = None,
-        full = dict(levs=np.arange(0, 30, 5), cmap=cmocean.cm.rain),
-        anom = dict(levs=np.linspace(-1, 1, 21) * 2, cmap=cmocean.cm.balance),
-        label = "SSTSK",
-        unit = "K",
-        offset = 273.15,
-        levs = np.linspace(-1, 1, 11) * 2,
-        cmap = cmocean.cm.balance,
-    ),
-
-    T2 = dict(
+    "T2" : dict(
         selector = None,
         full = dict(levs=np.arange(0, 850, 50), cmap=cmocean.cm.rain),
         anom = dict(levs=np.linspace(-1, 1, 21) * 30, cmap=cmocean.cm.balance),
@@ -95,8 +85,19 @@ plot_infos = dict(
     ), 
 
 
+    "IWV" : dict(
+        selector = None,
+        full = dict(levs=np.arange(0, 30, 5), cmap=cmocean.cm.rain),
+        anom = dict(levs=np.linspace(-1, 1, 11) * 2, cmap=cmocean.cm.balance),
+        label = "IWV",
+        unit = "$\\mathrm{kg} / \\mathrm{m}^3 $",
+        levs = np.linspace(-1, 1, 11) * 50,
+        cmap = cmocean.cm.balance,
+    ), 
 
-    IVT = dict(
+
+
+    "IVT" : dict(
         selector = None,
         full = dict(levs=np.arange(0, 850, 50), cmap=cmocean.cm.rain, markerlevs=[500.0]),
         anom = dict(levs=np.linspace(-1, 1, 11) * 50, cmap=cmocean.cm.balance),
@@ -106,117 +107,44 @@ plot_infos = dict(
         cmap = cmocean.cm.balance,
     ), 
 
-
-
-
-
-    convective_precipitation = dict(
+    "WND::850" : dict(
         selector = None,
-        label = "Daily convective precip",
-        unit = "$\\mathrm{mm}$",
-        factor = 1e3,
-        lim = [0, 30],
-        #levs = np.linspace(-1, 1, 11) * 50,
-        #cmap = cmocean.cm.balance,
+        full = dict(levs=np.arange(0, 55, 5), cmap=cmocean.cm.rain, markerlevs=[40.0]),
+        anom = dict(levs=np.linspace(-1, 1, 11) * 2, cmap=cmocean.cm.balance),
+        label = "$ \\mathrm{WND}_{850}$",
+        unit = "$\\mathrm{m} / \\mathrm{s}$",
     ), 
 
-
-    large_scale_precipitation = dict(
+    "WND::200" : dict(
         selector = None,
-        label = "Daily large-scale precip",
-        unit = "$\\mathrm{mm}$",
-        factor = 1e3,
-        lim = [0, 30],
-        #levs = np.linspace(-1, 1, 11) * 50,
-        #cmap = cmocean.cm.balance,
-    ), 
-
-
-    total_precipitation = dict(
-        selector = None,
-        label = "Daily total precip",
-        unit = "$\\mathrm{mm}$",
-        factor = 1e3,
-        lim = [0, 30],
-        #levs = np.linspace(-1, 1, 11) * 50,
-        #cmap = cmocean.cm.balance,
+        full = dict(levs=np.arange(0, 55, 5), cmap=cmocean.cm.rain, markerlevs=[40.0]),
+        anom = dict(levs=np.linspace(-1, 1, 11) * 5, cmap=cmocean.cm.balance),
+        label = "$ \\mathrm{WND}_{200}$",
+        unit = "$\\mathrm{m} / \\mathrm{s}$",
     ), 
 
 
 
-    SST_NOLND = dict(
+    "PH::850" : dict(
         selector = None,
-        label = "SST",
-        unit = "K",
-        levs = np.linspace(-1, 1, 11) * 2,
-        cmap = cmocean.cm.balance,
-    ), 
-
-
-    PH850 = dict(
-        selector = None,
+        full = dict(levs=np.arange(1000, 2000, 50), cmap=cmocean.cm.rain, markerlevs=[500.0]),
+        anom = dict(levs=np.linspace(-1, 1, 11) * 10, cmap=cmocean.cm.balance),
         label = "$ \\Phi_{850}$",
         unit = "$\\mathrm{m}^2 / \\mathrm{s}^2$",
-        levs = np.linspace(-1, 1, 11) * 50,
-        cmap = cmocean.cm.balance,
+        factor = 9.8,
     ), 
 
-
-    PH500 = dict(
+    "PH::200" : dict(
         selector = None,
-        label = "$ \\Phi_{500}$",
+        full = dict(levs=np.arange(10000, 12000, 50), cmap="rainbow"),
+        anom = dict(levs=np.linspace(-1, 1, 11) * 50, cmap=cmocean.cm.balance),
+        label = "$ \\Phi_{200}$",
         unit = "$\\mathrm{m}^2 / \\mathrm{s}^2$",
-        levs = np.linspace(-1, 1, 11) * 200,
-        cmap = cmocean.cm.balance,
+        factor = 9.8,
     ), 
 
 
-
-    TA = dict(
-        selector = dict(bottom_top=0),
-        wrf_varname = "T",
-        label = "$\\Theta_{A}$",
-        unit = "K",
-    ), 
-
-    TOA = dict(
-        wrf_varname = "TOA",
-        label = "$\\Theta_{OA}$",
-        unit = "K",
-    ), 
-
-    QOA = dict(
-        wrf_varname = "QOA",
-        label = "$Q_{OA}$",
-        unit = "g / kg",
-    ), 
-
-    CH = dict(
-        wrf_varname = "CH",
-        label = "$C_{H}$",
-    ), 
-
-    CQ = dict(
-        wrf_varname = "CQ",
-        label = "$C_{Q}$",
-    ), 
-
-    UA = dict(
-        selector = dict(bottom_top=0),
-        wrf_varname = "U",
-        label = "$u_{A}$",
-        unit = "$ \\mathrm{m} \\, / \\, \\mathrm{s}$",
-    ), 
-
-    VA = dict(
-        selector = dict(bottom_top=0),
-        wrf_varname = "V",
-        label = "$v_{A}$",
-        unit = "$ \\mathrm{m} \\, / \\, \\mathrm{s}$",
-    ), 
-
-)
-
+}
 
 def doJob(details, detect_phase=False):
 
@@ -284,7 +212,12 @@ def doJob(details, detect_phase=False):
                     time = plot_time.strftime("%Y-%m-%dT%H:%M:%S"),
                 )
 
-                da = xr.open_dataset(load_file)[varname]
+                varname_in_ds = varname
+                if re.search(r"::", varname):
+                     varname_in_ds = varname.split("::")[0]
+
+                print("VARNAME: ", varname_in_ds)
+                da = xr.open_dataset(load_file)[varname_in_ds]
                 da = da.isel(time=0)
                 tmp.append(da)
                      

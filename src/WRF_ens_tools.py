@@ -1,5 +1,25 @@
 from pathlib import Path
+import re
+import xarray as xr
+def parseVarname(varname_long):
+    
+    m = re.match(r'(?P<varname>\w+)(::(?P<level>[0-9]+))?', varname_long)
 
+    varname = None
+    level = None
+    if m:
+        
+        d = m.groupdict()
+        print("GROUPDICT: ", d)
+        varname = d["varname"]
+        level = d["level"]
+        if level is not None:
+            level = int(level)
+        
+    else:
+        raise Exception("Varname %s cannot be parsed. ") 
+
+    return varname, level
 
 
 def parseRanges(input_str):
@@ -32,4 +52,29 @@ def genEnsStatFilename(expname, group, varname, dt, root=".", level=None):
     ))
 
     return output_file     
+
+
+def genEnsFilename(expname, group, ens_id, varname, dt, root="."):
+
+    root = Path(root)
+    
+    # Detecting
+    output_file = root / expname / group / f"{ens_id:02d}" / ("{varname:s}-{time:s}.nc".format(
+        varname = varname,
+        time = dt.strftime("%Y-%m-%dT%H:%M:%S"),
+    ))
+
+    return output_file     
+
+
+def loadGroup(expname, group, ens_ids, varname, dt, root="."):
+
+    files = [
+        genEnsFilename(expname, group, ens_id, varname, dt, root=root)
+        for ens_id in ens_ids 
+    ]
+
+    ds = xr.open_mfdataset(files)
+
+    return ds
 

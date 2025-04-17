@@ -7,8 +7,8 @@ source 98_trapkill.sh
 
 wrfout_data_interval=$(( 3600 * 6 ))
 
-varnames="IWV PH::200 WND::200 PH::850 WND::850 PSFC TTL_RAIN SST T2 IVT"
-
+varnames="TTL_RAIN IWV PH::200 WND::200 PH::850 WND::850 PSFC SST T2 IVT"
+#varnames="TTL_RAIN"
 
 nparams=2
 for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
@@ -20,9 +20,9 @@ for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
     echo ":: group   = $group"
     
     input_WRF_root=$WRF_archived_root
-    output_root=$output_ens_stat_dir
+    output_root=$output_wrf_regrid_dir
     
-    python3 src/gen_ensemble_analysis.py                 \
+    python3 src/gen_regrid_wrf.py                        \
         --nproc $nproc                                   \
         --regrid-file $regrid_file                       \
         --expname $expname                               \
