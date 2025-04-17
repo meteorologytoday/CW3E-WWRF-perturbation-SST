@@ -15,7 +15,6 @@ import WRF_ens_tools
 import regrid_tools
 import re
 
-
 def doJob(details, detect_phase=False):
 
     # phase \in ['detect', 'work']
@@ -34,48 +33,46 @@ def doJob(details, detect_phase=False):
         exp_beg_time    = details["exp_beg_time"]
         wrfout_data_interval = details["wrfout_data_interval"]
         frames_per_wrfout_file = details["frames_per_wrfout_file"]
-        wrfout_prefix   = details["wrfout_prefix"]
         wrfout_suffix   = details["wrfout_suffix"]
         regrid_file     = Path(details["regrid_file"])
-        output_root     = Path(details["output_root"]) 
-        input_style     = details["input_style"]
-
+        output_root      = Path(details["output_root"]) 
+        
         exp_beg_time = pd.Timestamp(exp_beg_time)
         wrfout_data_interval = pd.Timedelta(seconds=wrfout_data_interval)
         target_time = exp_beg_time + pd.Timedelta(hours=target_hour)
-
+        
         # Detecting
-        output_file = WRF_ens_tools.genEnsFilename(expname, group, ens_id, varname_level, target_time, root=output_root)
+        output_file = WRF_ens_tools.genEnsFilename(expname, group, ens_id, varname_level, target_time, root=output_root, style="CW3E-WestWRF")
         result["output_file"] = output_file
-
+        
         # First round is just to decide which files
         # to be processed to enhance parallel job 
         # distribution. I use variable `phase` to label
         # this stage.
         if detect_phase is True:
-
+            
             result['need_work'] = not output_file.exists()
-
+            
             if result['need_work']:
                 result['status'] = 'OK'
             else:           
                 result['status'] = 'OK'
                 result['need_work'] = False
-
+        
             return result
-
+        
         output_file.parent.mkdir(parents=True, exist_ok=True)
-
+        
         ds_regrid = xr.open_dataset(regrid_file)
         WRF_lat_idx = ds_regrid["WRF_lat_idx"].to_numpy()
         WRF_lon_idx = ds_regrid["WRF_lon_idx"].to_numpy()
-
+        
         lat_regrid = ds_regrid["lat_regrid"].to_numpy()   
         lon_regrid = ds_regrid["lon_regrid"].to_numpy()   
-    
+        
         WRF_avg_info   = regrid_tools.constructAvgMtx(WRF_lat_idx,   WRF_lon_idx,   len(lat_regrid), len(lon_regrid))
-
-
+        
+        
         wsm = wrf_load_helper.WRFSimMetadata(
             start_datetime  = exp_beg_time,
             data_interval   = wrfout_data_interval,
@@ -91,14 +88,8 @@ def doJob(details, detect_phase=False):
             expname = expname,
             group = group,
             ens_id = ens_id,
-            root = input_WRF_root,
-            filename_style = input_style, 
+            root = input_WRF_root, 
         )
-            
-        if input_style == "default":
-            time_fmt=wrf_load_helper.wrfout_time_fmt
-        elif input_style == "CW3E-WestWRF":
-            time_fmt="%Y-%m-%d_%H_%M_%S"
         
         # Load WRF  
         print("Loading wrf dir: %s, ens_id=%d" % (input_WRF_dir, ens_id))
@@ -114,20 +105,17 @@ def doJob(details, detect_phase=False):
             verbose=False,
             inclusive="both",
             drop_latlon_time_dependency = True,
-            time_fmt=time_fmt,
         )
 
         if level is not None:
             ds = ds.sel(pressure=level)
 
         if varname == "WND":
+            
             da = ((ds["U"]**2 + ds["V"]**2)**0.5).rename("WND")
 
         elif varname == "TTL_RAIN":
-            if input_style == "default":
-                da = ds["RAINNC"] + ds["RAINC"]
-            elif input_style == "CW3E-WestWRF":
-                da = ds["precip"]
+            da = ds["RAINNC"] + ds["RAINC"]
             da = da.rename("TTL_RAIN")
         else:
             da = ds[varname]
@@ -136,6 +124,7 @@ def doJob(details, detect_phase=False):
         _data = da.to_numpy()
 
         regrid_data = regrid_tools.regrid(WRF_avg_info, _data)
+
         regrid_data = np.expand_dims(regrid_data, axis=0)
 
         print("Making output dataset...")
@@ -188,10 +177,8 @@ if __name__ == "__main__":
     parser.add_argument('--exp-beg-time', type=str, help='analysis beg time', required=True)
     parser.add_argument('--wrfout-data-interval', type=int, help='Time interval between each adjacent record in wrfout files in seconds.', required=True)
     parser.add_argument('--frames-per-wrfout-file', type=int, help='Number of frames in each wrfout file.', required=True)
-    parser.add_argument('--wrfout-prefix', type=str, default="wrfout_d01_")
     parser.add_argument('--wrfout-suffix', type=str, default="")
     parser.add_argument('--regrid-file', type=str, help="The regrid file.", required=True)
-    parser.add_argument('--input-style', type=str, default="default")
     
     parser.add_argument('--output-root', type=str, help='Output filename in nc file.', required=True)
     parser.add_argument('--nproc', type=int, help="Number of processors", default=1)
@@ -236,11 +223,9 @@ if __name__ == "__main__":
                     exp_beg_time = args.exp_beg_time,
                     wrfout_data_interval = args.wrfout_data_interval,
                     frames_per_wrfout_file = args.frames_per_wrfout_file,
-                    wrfout_prefix = args.wrfout_prefix,
                     wrfout_suffix = args.wrfout_suffix,
                     regrid_file = args.regrid_file,
                     output_root = args.output_root,
-                    input_style = args.input_style,
                 )
 
                 print("[Detect] Checking %s (hour=%d)" % (varname, target_hour,))

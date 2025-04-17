@@ -34,20 +34,12 @@ def parseRanges(input_str):
     return numbers
 
 
-def genWRFEnsRelPathDir(expname, group, ens_id, root=".", filename_style="default"):
-   
-    filename_style = filename_style.rstrip()
- 
-    if filename_style == "default":
-        result_dir = Path(root) / expname / "runs" / group / f"{ens_id:02d}" / "output" / "wrfout"
-    elif filename_style == "CW3E-WestWRF":
-        result_dir = Path(root) / expname / f"{group:s}{ens_id:03d}"
-    else:
-        raise Exception("Unknown style: %s" % (filename_style,)) 
+def genWRFEnsRelPathDir(expname, group, ens_id, root="."):
+    
+    result_dir = Path(root) / expname / "runs" / group / f"{ens_id:02d}" / "output" / "wrfout"
 
     return result_dir
 
-"""
 def genEnsStatFilename(expname, group, varname, dt, root=".", level=None):
 
     root = Path(root)
@@ -60,7 +52,7 @@ def genEnsStatFilename(expname, group, varname, dt, root=".", level=None):
     ))
 
     return output_file     
-"""
+
 
 def genEnsFilename(expname, group, ens_id, varname, dt, root="."):
 

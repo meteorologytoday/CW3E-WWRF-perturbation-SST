@@ -76,6 +76,7 @@ plot_infos = {
         selector = None,
         full = dict(levs=np.arange(0, 100, 5), cmap=cmocean.cm.rain),
         anom = dict(levs=np.linspace(-1, 1, 11) * 15, cmap=cmocean.cm.balance),
+        anom_quantile = dict(levs=np.linspace(-1, 1, 21) * 30, cmap=cmocean.cm.balance),
         label = "$ \\mathrm{ACC}_{\\mathrm{ttl}}$",
         unit = "mm",
         cmap = cmocean.cm.balance,
@@ -176,10 +177,10 @@ def doJob(details, detect_phase=False):
         expnames        = details["expnames"]
         groups          = details["groups"]
         ens_ids         = details["ens_ids"]
-        plot_quartile = details["plot_quartile"]
+        plot_quantile = details["plot_quantile"]
         
         pval       = details["pval"]
-        
+        qs         = details["quantiles"]        
         
         exp_beg_time    = pd.Timestamp(details["exp_beg_time"])
         plot_rel_time   = pd.Timedelta(hours=details["plot_rel_time"])
@@ -195,8 +196,8 @@ def doJob(details, detect_phase=False):
             full_names.append(f"{expname:s}-{group:s}") 
 
         output_types = ["mean", ]
-        if plot_quartile:
-            output_types.append("quartile")
+        if plot_quantile:
+            output_types.append("quantile")
 
         output_files = {
             output_type : output_root / "-".join(full_names) / "{output_type:s}_{varname:s}_{plot_time:s}.{ext:s}".format(
@@ -282,24 +283,26 @@ def doJob(details, detect_phase=False):
                 collection.set_linewidth(0.)
 
 
-        figsize, gridspec_kw = tool_fig_config.calFigParams(
-            w = w_map,
-            h = h,
-            wspace = 1.5,
-            hspace = 1.0,
-            w_left = 1.0,
-            w_right = 1.5,
-            h_bottom = 1.5,
-            h_top = 1.0,
-            ncol = ncol,
-            nrow = nrow,
-        )
-
-
 
         if "mean" in output_types:
 
             output_file = output_files["mean"]
+
+            figsize, gridspec_kw = tool_fig_config.calFigParams(
+                w = w_map,
+                h = h,
+                wspace = 1.5,
+                hspace = 1.0,
+                w_left = 1.0,
+                w_right = 1.5,
+                h_bottom = 1.5,
+                h_top = 1.0,
+                ncol = ncol,
+                nrow = nrow,
+            )
+
+
+
             fig, ax = plt.subplots(
                 nrow, ncol,
                 figsize=figsize,
@@ -439,11 +442,27 @@ def doJob(details, detect_phase=False):
             print("Saving output: ", output_file) 
             fig.savefig(output_file, dpi=200)
 
-        if "quartile" in output_types:
-            output_file = output_files["mean"]
+        if "quantile" in output_types:
+            output_file = output_files["quantile"]
 
-            qs = [0.25, 0.75]
             ncol = 1 + len(qs) * (len(iter_obj)-1)
+
+            figsize, gridspec_kw = tool_fig_config.calFigParams(
+                w = w_map,
+                h = h,
+                wspace = 1.5,
+                hspace = 1.0,
+                w_left = 1.0,
+                w_right = 1.5,
+                h_bottom = 1.5,
+                h_top = 1.0,
+                ncol = ncol,
+                nrow = nrow,
+            )
+
+
+
+
             fig, ax = plt.subplots(
                 nrow, ncol,
                 figsize=figsize,
@@ -518,12 +537,26 @@ def doJob(details, detect_phase=False):
 
                     else:
 
-                        _da_qstat_diff = (_da - _da_ref).quantile(qs, dim="ens")
-
                         for q in qs:
-                           
+                            
                             _ax = axes[ax_idx] ; ax_idx+=1
-                            mappable = _ax.contourf(lon, lat, _da_qstat_diff.sel(quantil=q).to_numpy() / factor, plot_info["anom"]["levs"], cmap="bwr", transform=proj, extend="both")
+                            print("Plotting q = ", q)
+                            _da_qstat_diff = (_da - _da_ref).chunk(dict(ens=-1)).quantile(q, dim="ens")
+
+                            plotted_data = _da_qstat_diff / factor
+                            #plotted_data = _da_qstat_diff.sel(quantile=q, drop=True) / factor
+
+                            print(plotted_data)
+                            anom_contourf_info = testIfIn(plot_info, "anom_quantile", plot_info["anom"])
+                            
+                            mappable = _ax.contourf(
+                                plotted_data.coords["lon"],
+                                plotted_data.coords["lat"], 
+                                plotted_data.to_numpy(), 
+                                anom_contourf_info["levs"],
+                                cmap=anom_contourf_info["cmap"], transform=proj, extend="both",
+                            )
+                            
                             cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
                             cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
                             cb.ax.set_ylabel("[ %s ]" % (plot_info["unit"],))
@@ -607,8 +640,9 @@ if __name__ == "__main__":
     parser.add_argument('--lon-rng', type=float, nargs=2, help="Latitude range for plotting", default=[0.0, 360.0])
     parser.add_argument('--nproc', type=int, help="Number of processors", default=1)
     parser.add_argument('--pval', type=float, help="p-value", default=0.1)
+    parser.add_argument('--quantiles', type=float, nargs="+", help="Quantiles", default=[0.25, 0.75])
     
-    parser.add_argument('--plot-quartile', action="store_true", help="p-value")
+    parser.add_argument('--plot-quantile', action="store_true", help="p-value")
     
     
     args = parser.parse_args()
@@ -659,7 +693,8 @@ if __name__ == "__main__":
             plot_rel_time = plot_rel_time,
             output_root = args.output_root,
             pval = args.pval,
-            plot_quartile = args.plot_quartile,
+            plot_quantile = args.plot_quantile,
+            quantiles = args.quantiles,
         )
 
         print("[Detect] Checking hour=%d" % (plot_rel_time,))

@@ -1,7 +1,10 @@
 #!/bin/bash
 
+source 00_setup.sh
 
-naming_style=v2
+naming_style=default
+wrfout_prefix=wrfout_d01_
+wrfout_suffix=_temp
 verification_days=10
 WRF_archived_root=/expanse/lustre/scratch/t2hsu/temp_project/CW3E_WRF_RUNS/0.08deg
 
@@ -19,9 +22,9 @@ if [ "$label" == "" ]; then
     echo "Error: Loading config failed. Variable `label` is still empty."
 fi 
 
-mask_file=gendata/mask.nc
+mask_file=$gendata_dir/mask.nc
 
-output_dir=gendata/$label
+output_dir=$gendata_dir/$label
 output_PRISM=$output_dir/verification_PRISM.nc
 output_CRPS_dir=$output_dir/CRPS
 output_ens_stat_dir=$output_dir/ens_stat

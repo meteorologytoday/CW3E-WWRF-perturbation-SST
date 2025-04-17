@@ -7,7 +7,7 @@ source 00_setup.sh
 varnames=(  TTL_RAIN  )
 #varnames=(  PH::850 PSFC SST )
 
-nproc=1
+nproc=10
 
 source 60_verification_setup.sh    
 
@@ -38,8 +38,8 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     output_root=$fig_dir/ens_compare
     mkdir -p $output_root
 
-    time_beg=0
-    time_end=246
+    time_beg=$(( 24 * 0 ))
+    time_end=$(( 24 * 10 + 6 ))
     time_stride=6
     python3 ./src/plot_ensemble_diff_stat.py \
         --input-root $input_root             \
@@ -55,8 +55,9 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
         --lat-rng 10 70                      \
         --lon-rng $(( 360 - 179 )) $(( 360 - 105 ))           \
         --pval 0.1 \
+        --quantiles 0 0.25 0.75 1.0 \
         --extension png                                   \
-        --plot-quartile \
+        --plot-quantile \
         --nproc $nproc 
 
 done
