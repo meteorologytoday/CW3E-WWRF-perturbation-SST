@@ -28,7 +28,8 @@ output_dir=$gendata_dir/$label
 output_PRISM=$output_dir/verification_PRISM.nc
 output_CRPS_dir=$output_dir/CRPS
 output_ens_stat_dir=$output_dir/ens_stat
-output_wrf_regrid_dir=$output_dir/regrid_data
+
+wrf_regrid_dir=$gendata_dir/regrid_data
 
 exp_beg_time=$verification_date_beg
 wrfout_data_interval=$(( 3600 * 24 ))

@@ -10,6 +10,7 @@
 
 - Use `66_gen_PRISM_verification_dataset.sh` to generate PRISM data.
 - Use `81_gen_CRPS.sh` to generate map of data.
+- Use `83_gen_regrid_wrf.sh` to regrid download WRF file.
 
 
 # Plot

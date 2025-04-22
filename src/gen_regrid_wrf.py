@@ -129,6 +129,12 @@ def doJob(details, detect_phase=False):
             elif input_style == "CW3E-WestWRF":
                 da = ds["precip"]
             da = da.rename("TTL_RAIN")
+        elif varname == "PSFC":
+            if input_style == "default":
+                da = ds[varname]
+            elif input_style == "CW3E-WestWRF":
+                da = ds["slp"].rename("PSFC") * 1e2
+
         else:
             da = ds[varname]
         

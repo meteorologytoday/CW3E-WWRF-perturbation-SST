@@ -176,7 +176,7 @@ def doJob(details, detect_phase=False):
         input_root      = Path(details["input_root"])
         expnames        = details["expnames"]
         groups          = details["groups"]
-        ens_ids         = details["ens_ids"]
+        ens_rngs        = details["ens_rngs"]
         plot_quantile = details["plot_quantile"]
         
         pval       = details["pval"]
@@ -189,10 +189,10 @@ def doJob(details, detect_phase=False):
 
         plot_time = exp_beg_time + plot_rel_time
 
-        iter_obj = list(zip(expnames, groups))
+        iter_obj = list(zip(expnames, groups, ens_rngs))
 
         full_names = []
-        for expname, group in iter_obj:
+        for expname, group, _ in iter_obj:
             full_names.append(f"{expname:s}-{group:s}") 
 
         output_types = ["mean", ]
@@ -239,8 +239,12 @@ def doJob(details, detect_phase=False):
         for varname in varnames:
         
             tmp = []
-            for expname, group in iter_obj:
+            for expname, group, ens_rng in iter_obj:
                 
+                ens_ids = WRF_ens_tools.parseRanges(ens_rng)
+                print("Ensemble ids: %s => %s" % (ens_ids, ",".join(["%d" % i for i in ens_ids] ) ))
+
+
                 print("Load %s - %s" % (expname, group,)) 
                 da = WRF_ens_tools.loadGroup(expname, group, ens_ids, varname, plot_time, root=input_root)[varname]
                 da = da.isel(time=0)
@@ -627,7 +631,7 @@ if __name__ == "__main__":
     parser.add_argument('--extension', type=str, help='analysis beg time', default="svg")
     parser.add_argument('--expnames',  type=str, nargs="+", help='Input directories.', required=True)
     parser.add_argument('--groups',    type=str, nargs="+", help='Input directories.', required=True)
-    parser.add_argument('--ens-ids', type=str, help="Ens ids. Comma separated and can use range like 1-3,5,23-25", required=True)
+    parser.add_argument('--ens-rngs', type=str, nargs="+", help="Ens ids. Comma separated and can use range like 1-3,5,23-25. If only one argument is given, it will apply to everyone.", required=True)
     
     parser.add_argument('--varnames',  type=str, nargs="+", help='Input directories.', required=True)
 
@@ -653,8 +657,12 @@ if __name__ == "__main__":
     if len(args.expnames) != len(args.groups):
         raise Exception("Error: lengths of `--expnames`, `--groups`, do not match.")
    
-    ens_ids = WRF_ens_tools.parseRanges(args.ens_ids)
-    print("Ensemble ids: %s => %s" % (args.ens_ids, ",".join(["%d" % i for i in ens_ids] ) ))
+    ens_rngs = args.ens_rngs
+    if len(args.ens_rngs) == 1:
+        ens_rngs = [ ens_rngs[0] , ] * len(args.expnames)
+
+    if len(ens_rngs) != len(args.expnames):
+        raise Exception("Error: lengths of `--ens-rngs`, should be 1 or the same as `--groups`.")
 
 
     """ 
@@ -688,7 +696,7 @@ if __name__ == "__main__":
             input_root = args.input_root,
             expnames   = args.expnames,
             groups     = args.groups,
-            ens_ids    = ens_ids,
+            ens_rngs   = ens_rngs,
             exp_beg_time = args.exp_beg_time,
             plot_rel_time = plot_rel_time,
             output_root = args.output_root,
@@ -702,7 +710,7 @@ if __name__ == "__main__":
         result = doJob(details, detect_phase=True)
         
         if not result['need_work']:
-            print("File `%s` already exist. Skip it." % (result['output_file'],))
+            print("File `%s` already exist. Skip it." % (str(result['output_files']),))
             continue
         
         input_args.append((details, False))
@@ -714,7 +722,7 @@ if __name__ == "__main__":
         for i, result in enumerate(results):
             if result['status'] != 'OK':
                 print(result)
-                print('!!! Failed to generate output file %s.' % (str(result['output_file']),))
+                print('!!! Failed to generate output file %s.' % (str(result['output_files']),))
                 failed_dates.append(result['details'])
 
 
