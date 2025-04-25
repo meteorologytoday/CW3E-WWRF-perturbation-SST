@@ -3,7 +3,7 @@ import xarray as xr
 
 def getClimPRISMFilename(dt):
 
-    PRISM_filename = "/expanse/lustre/scratch/t2hsu/temp_project/data/PRISM-30yr/PRISM-ppt-{md:s}.nc".format(
+    PRISM_filename = "/data/SO3/t2hsu/data/PRISM/PRISM-30yr/PRISM-ppt-{md:s}.nc".format(
        md = dt.strftime("%m-%d"),
     )
 
@@ -13,7 +13,7 @@ def getClimPRISMFilename(dt):
 
 def getPRISMFilename(dt):
 
-    PRISM_filename = "/expanse/lustre/scratch/t2hsu/temp_project/data/PRISM_stable_4kmD2/PRISM_ppt_stable_4kmD2-{ymd:s}.nc".format(
+    PRISM_filename = "/data/SO3/t2hsu/data/PRISM/PRISM_stable_4kmD2/PRISM_ppt_stable_4kmD2-{ymd:s}.nc".format(
        ymd = dt.strftime("%Y-%m-%d"),
     )
 

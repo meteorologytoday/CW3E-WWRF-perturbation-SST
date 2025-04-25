@@ -11,7 +11,7 @@ varnames="TTL_RAIN IWV PH::200 WND::200 PH::850 WND::850 PSFC SST T2 IVT"
 #varnames="TTL_RAIN"
 
 #varnames="SST PSFC TTL_RAIN IWV IVT"
-varnames="SST PSFC"
+varnames="TTL_RAIN"
 
 nparams=3
 for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
@@ -40,7 +40,7 @@ for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
         --wrfout-suffix $wrfout_suffix                   \
         --input-style $naming_style                      \
         --ens-ids $ens_ids                               \
-        --output-time-range  0  6                      \
+        --output-time-range  0  120                      \
         --output-root $output_root \
         --varnames $varnames 
 

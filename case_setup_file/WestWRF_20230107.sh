@@ -13,7 +13,8 @@ regrid_file=$gendata_dir/regrid_idx.nc
 WRF_archived_root=./data/WestWRF200member
 #WRF_archived_root=/expanse/lustre/scratch/t2hsu/temp_project/CW3E_WRF_RUNS/0.08deg
 WRF_params=(
-    $label  "gefs" "0-79"
+    $label  "ecm" "0-119"
+#    $label  "gefs" "0-79"
 )
 naming_style="CW3E-WestWRF"
 wrfout_prefix="wrfcf_d01_"

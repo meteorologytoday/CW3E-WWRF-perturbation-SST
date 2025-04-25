@@ -27,7 +27,7 @@ mask_file=$gendata_dir/mask.nc
 output_dir=$gendata_dir/$label
 output_PRISM=$output_dir/verification_PRISM.nc
 output_CRPS_dir=$output_dir/CRPS
-output_ens_stat_dir=$output_dir/ens_stat
+output_ens_stat_dir=$gendata_dir/ens_stat
 
 wrf_regrid_dir=$gendata_dir/regrid_data
 

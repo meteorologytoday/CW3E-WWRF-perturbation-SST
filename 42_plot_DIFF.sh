@@ -4,7 +4,7 @@ source 00_setup.sh
         
 #varnames=( SST TTL_RAIN PSFC IVT )
 #varnames=(  IWV WND::850 IVT TTL_RAIN SST )
-varnames=(  TTL_RAIN  )
+varnames=(  SST TTL_RAIN  )
 #varnames=(  PH::850 PSFC SST )
 
 nproc=10
@@ -25,6 +25,8 @@ else
 
 fi
 
+ens_rng=0-30
+
 nparams=2
 for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     
@@ -34,26 +36,26 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     echo ":: group1  = $group1"
     echo ":: group2  = $group2"
     
-    input_root=$output_wrf_regrid_dir
+    input_root=$wrf_regrid_dir
     output_root=$fig_dir/ens_compare
     mkdir -p $output_root
 
-    time_beg=$(( 24 * 0 ))
-    time_end=$(( 24 * 10 + 6 ))
+    time_beg=$(( 24 * 5 ))
+    time_end=$(( 24 * 5 + 6 ))
     time_stride=6
     python3 ./src/plot_ensemble_diff_stat.py \
         --input-root $input_root             \
         --output-root $output_root           \
         --expnames $expname $expname         \
         --groups $group1 $group2             \
-        --ens-ids $ens_ids                   \
+        --ens-rngs $ens_rng $ens_rng         \
         --varnames ${varnames[@]}            \
         --exp-beg-time $exp_beg_time         \
         --time-beg $time_beg \
         --time-end $time_end \
         --time-stride $time_stride \
-        --lat-rng 10 70                      \
-        --lon-rng $(( 360 - 179 )) $(( 360 - 105 ))           \
+        --lat-rng 30  50                      \
+        --lon-rng $(( 360 - 130 )) $(( 360 - 110 ))           \
         --pval 0.1 \
         --quantiles 0 0.25 0.75 1.0 \
         --extension png                                   \

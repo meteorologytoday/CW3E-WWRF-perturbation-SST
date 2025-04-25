@@ -21,6 +21,7 @@ WRF_archived_root=./data/PROCESSED_CW3E_WRF_RUNS/0.08deg
 WRF_params=(
 #    $label  "Baseline01" "BLANK"
     $label  "PAT00_AMP0.0"   "0-30"
+    $label  "PAT00_AMP2.0"   "0-30"
 #    $label  "PAT00_AMP1.0"   "0-30"
 #    $label  "PAT00_AMP-1.0"  "0-30"
 )

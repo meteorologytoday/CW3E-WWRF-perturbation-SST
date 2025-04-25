@@ -33,6 +33,22 @@ def parseRanges(input_str):
             numbers.append(int(part))
     return numbers
 
+def parseExpblob(expblob_str):
+    
+    expsets = expblob.split("|")
+
+    results = []
+    for expset in expset:
+        print(expset)
+        expname, group, ens_rng = expset.split("/")
+        
+        expname = expname.strip()
+        group   = group.strip()
+        ens_rng = ens_rng.strip()
+        results.append((expname, group, parseRanges(ens_rng)))
+    
+    return results
+
 
 def genWRFEnsRelPathDir(expname, group, ens_id, root=".", filename_style="default"):
    

@@ -16,7 +16,7 @@ else
     finalfig_dir=final_figures
 
     gendata_dir=./SO3_gendata
-    preavg_dir=$gendata_dir/preavg
+    regriddata_dir=$gendata_dir/regrid_data
 
     mkdir -p $fig_dir
 
