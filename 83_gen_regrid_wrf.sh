@@ -10,8 +10,7 @@ wrfout_data_interval=$(( 3600 * 6 ))
 varnames="TTL_RAIN IWV PH::200 WND::200 PH::850 WND::850 PSFC SST T2 IVT"
 #varnames="TTL_RAIN"
 
-#varnames="SST PSFC TTL_RAIN IWV IVT"
-varnames="TTL_RAIN"
+varnames="SST TTL_RAIN IWV IVT PSFC"
 
 nparams=3
 for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do

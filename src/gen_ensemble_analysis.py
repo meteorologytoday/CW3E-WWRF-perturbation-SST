@@ -14,7 +14,6 @@ import datetime
 import os
 from pathlib import Path
 
-import CRPS_tools
 import PRISM_tools
 import cmocean
 from scipy import sparse
@@ -38,9 +37,10 @@ def doJob(details, detect_phase=False):
         output_dir     = Path(details["output_dir"]) 
         output_prefix   = details["output_prefix"] 
         
-        output_file = output_dir / ("%s_%s.nc" % (
+        output_file = output_dir / ("%s_%s_%s.nc" % (
             output_prefix,
-            target_time.strftime("%Y-%m-%d"),
+            varname,
+            target_time.strftime("%Y-%m-%d_%H"),
         ))
         
         # Detecting
@@ -84,9 +84,9 @@ def doJob(details, detect_phase=False):
         da = xr.merge(ds).transpose("ens", "time", "lat", "lon")[varname]
         
         merge_data = []
-        merge_data.append(da.std(dim="ens").expand_dims(dim={"stat": ["std",]}, axis=1).rename(varname))
-        merge_data.append(da.mean(dim="ens").expand_dims(dim={"stat": ["mean",]}, axis=1).rename(varname))
-        merge_data.append(da.count(dim="ens").expand_dims(dim={"stat": ["count",]}, axis=1).rename(varname))
+        merge_data.append(da.std(dim="ens").expand_dims(dim={"stat": np.array(["std",])}, axis=1).rename(varname))
+        merge_data.append(da.mean(dim="ens").expand_dims(dim={"stat": np.array(["mean",])}, axis=1).rename(varname))
+        merge_data.append(da.count(dim="ens").expand_dims(dim={"stat": np.array(["count",])}, axis=1).rename(varname))
 
         ds_output = xr.merge(merge_data)
         
@@ -101,9 +101,10 @@ def doJob(details, detect_phase=False):
 
     except Exception as e:
 
+        traceback.print_exc()
         result['status'] = 'ERROR'
         #traceback.print_stack()
-        traceback.print_exc()
+
         print(e)
 
 
@@ -152,7 +153,7 @@ if __name__ == "__main__":
             result = doJob(details, detect_phase=True)
             
             if not result['need_work']:
-                print("File `%s` already exist. Skip it." % (str(result['output_files']),))
+                print("File `%s` already exist. Skip it." % (str(result['output_file']),))
                 continue
             
             input_args.append((details, False))

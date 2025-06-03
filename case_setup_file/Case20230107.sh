@@ -22,8 +22,11 @@ WRF_params=(
 #    $label  "Baseline01" "BLANK"
     $label  "PAT00_AMP0.0"   "0-30"
     $label  "PAT00_AMP2.0"   "0-30"
-#    $label  "PAT00_AMP1.0"   "0-30"
-#    $label  "PAT00_AMP-1.0"  "0-30"
+
+    $label  "PAT01_AMP-1.0"  "0-30"
+    $label  "PAT01_AMP1.0"   "0-30"
+    $label  "PAT01_AMP2.0"  "0-30"
+    $label  "PAT01_AMP4.0"  "0-30"
 )
 
 exp_beg_time=$verification_date_beg

@@ -309,10 +309,10 @@ if __name__ == "__main__":
     cb.ax.set_xlabel("Precip Change [ $\\mathrm{mm}$ ]")
  
     _ax = ax_flatten[2]
-    mappable = _ax.contourf(lon, lat, ratio, np.linspace(-1, 1, 11) * 0.5, cmap="cmo.balance", transform=proj, extend="both")
+    mappable = _ax.contourf(lon, lat, ratio * 1e2, np.linspace(-1, 1, 11) * 0.5 * 1e2, cmap="cmo.balance", transform=proj, extend="both")
     cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "bottom", thickness=0.03, spacing=0.17)
     cb = plt.colorbar(mappable, cax=cax, orientation="horizontal", pad=0.00)
-    cb.ax.set_xlabel("Change / Spread")
+    cb.ax.set_xlabel("Change / Spread [ % ]")
     
     #plot_hatch(_ax, lon, lat, rel_CRPS, 0.2, hatch="..")
     #plot_hatch(_ax, lon, lat, -rel_CRPS, 0.2, hatch="//")

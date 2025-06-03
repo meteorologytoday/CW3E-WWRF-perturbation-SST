@@ -16,3 +16,13 @@
 # Plot
 
 - Use `41_plot_CRPS.sh` to plot map of CRPS.
+
+
+
+# TODO
+
+## Verification
+
+- Gridded observational data PRISM (done).
+- Statistics of simulation data (done).
+- Skill-spread relationship

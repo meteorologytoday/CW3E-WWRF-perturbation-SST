@@ -99,8 +99,20 @@ def doJob(details, detect_phase=False):
             raise Exception("Error: `--lead-days` has to be an integer.")
             
 
+        PRISM_ds = PRISM_tools.loadDatasetWithTime(dt).isel(time=0)
+        PRISM_clim = PRISM_tools.loadClimDatasetWithTime(beg_dt, end_dt=None, inclusive="both")
+
+
+        
+        PRISM_ds = loadDatasetWithTime(beg_dt, end_dt=None, inclusive="both"):
+
+
         data = dict(CRPS=[], mu=[], sig=[], obs=[], clim_CRPS=[], clim_mu=[], clim_sig=[]) 
         times = pd.date_range(time_beg, time_end, freq="D")
+
+
+
+
         for lead_day in range(lead_days):
      
             _beg_time = exp_beg_time
@@ -109,8 +121,8 @@ def doJob(details, detect_phase=False):
             print("##### Doing time: ", _beg_time, " to ", _end_time)
              
             # Load PRISM
-            PRISM_ds = PRISM_tools.loadDatasetWithTime(dt).isel(time=0)
-        
+
+       
             # Regrid
             data_PRISM = regrid(PRISM_avg_info, PRISM_ds["total_precipitation"].to_numpy())
        
@@ -262,90 +274,92 @@ def work():
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--input-root', type=str, help='Input directories.', required=True)
-    parser.add_argument('--expblobs', type=str, nargs="+", help='Format: [expname1]::[group1]::[ens_rng1]|[expname2]::[group2]::[ens_rng2]', required=True)
-
+    parser.add_argument('--input-files', type=str, nargs="+", help='Input stat files.', required=True)
+    parser.add_argument('--ttl-rain-time-rng', type=str, nargs=2, help='analysis beg time',    required=True)
     parser.add_argument('--no-display', action="store_true")
-    parser.add_argument('--exp-beg-time', type=str, help='analysis beg time',    required=True)
-    parser.add_argument('--time-beg', type=int, help='Hours after exp-beg-time', required=True)
-    parser.add_argument('--time-end', type=int, help='Hours after exp-beg-time', required=True)
-    parser.add_argument('--time-stride', type=int, help='In hours.', required=True)
+
     parser.add_argument('--regrid-file', type=str, help="The regrid file.", required=True)
-    
     parser.add_argument('--clim-year-range', type=int, nargs=2, help='Output filename in nc file.', default=[1991, 2021])
-    
     parser.add_argument('--output', type=str, help='Output filename in nc file.', required=True)
 
     args = parser.parse_args()
-
+    
     print(args)
     
     clim_years = list(range(args.clim_year_range[0], args.clim_year_range[1]+1))
+   
+    sim_data = [ xr.open_dataset(input_file) for input_file in args.input_files ]
+ 
+    PRISM_ds = PRISM_tools.loadDatasetWithTime(dt).isel(time=0)
+    PRISM_clim = PRISM_tools.loadClimDatasetWithTime(beg_dt, end_dt=None, inclusive="both")
 
-    expsubsets = [ WRF_ens_tools.parseExpsubet(expsubset) for expsubset in args.expsubsets ]
+    print("Loading regrid_file: ", regrid_file)        
+    ds_regrid = xr.open_dataset(regrid_file)
+    PRISM_lat_idx = ds_regrid["PRISM_lat_idx"].to_numpy()
+    PRISM_lon_idx = ds_regrid["PRISM_lon_idx"].to_numpy()
+    lat_regrid = ds_regrid["lat_regrid"].to_numpy()   
+    lon_regrid = ds_regrid["lon_regrid"].to_numpy()   
+    
+    PRISM_avg_info = regrid_tools.constructAvgMtx(PRISM_lat_idx, PRISM_lon_idx, len(lat_regrid), len(lon_regrid))
 
-    for i, expsubset in enumerate(expsubsets):
-        print("(%d)" % i, expsubset)
-
-
-
-    failed_dates = []
-    input_args = []
-
-    for long_varname in args.varnames:
+    lead_days = (target_time - exp_beg_time) / pd.Timedelta(days=1) 
+    
+    if lead_days <= 0:
+        raise Exception("Error: `--lead-days` has to be positive.")
+    
+    if lead_days % 1 != 0:
+        raise Exception("Error: `--lead-days` has to be an integer.")
         
-        varname, level = WRF_ens_tools.parseVarname(long_varname)
-        
-        print("Full varname: %s" % (long_varname,))
-        print("Parsed varname: %s" % (varname,))
-        print("Parsed level: %s" % ( "%d" % level if level is not None else "N/A") )
-        
-        for target_hour in range(args.output_time_range[0], args.output_time_range[1]+1, stepping_hour):
-            for ens_id in ens_ids:  
-                details = dict(
-                    varname_level = long_varname,
-                    varname = varname,
-                    level   = level,
-                    input_WRF_root = args.input_WRF_root,
-                    expname = args.expname,
-                    group = args.group,
-                    ens_id = ens_id,
-                    target_hour = target_hour,
-                    exp_beg_time = args.exp_beg_time,
-                    wrfout_data_interval = args.wrfout_data_interval,
-                    frames_per_wrfout_file = args.frames_per_wrfout_file,
-                    wrfout_prefix = args.wrfout_prefix,
-                    wrfout_suffix = args.wrfout_suffix,
-                    regrid_file = args.regrid_file,
-                    output_root = args.output_root,
-                    input_style = args.input_style,
-                )
 
-                print("[Detect] Checking %s (hour=%d)" % (varname, target_hour,))
+    PRISM_ds = PRISM_tools.loadDatasetWithTime(dt).isel(time=0)
+    PRISM_clim = PRISM_tools.loadClimDatasetWithTime(beg_dt, end_dt=None, inclusive="both")
+
+
+    
+    PRISM_ds = loadDatasetWithTime(beg_dt, end_dt=None, inclusive="both"):
+
+
+    data = dict(CRPS=[], mu=[], sig=[], obs=[], clim_CRPS=[], clim_mu=[], clim_sig=[]) 
+    times = pd.date_range(time_beg, time_end, freq="D")
+
+
+
+
+    for lead_day in range(lead_days):
+ 
+        _beg_time = exp_beg_time
+        _end_time = _beg_time + pd.Timedelta(days=lead_day)
+         
+        print("##### Doing time: ", _beg_time, " to ", _end_time)
+         
+        # Load PRISM
+
+   
+        # Regrid
+        data_PRISM = regrid(PRISM_avg_info, PRISM_ds["total_precipitation"].to_numpy())
+   
+        # PRISM clim
+        PRISM_clim = []
+        for idx_y, year in enumerate(clim_years):
                 
-                result = doJob(details, detect_phase=True)
+            center_dt = pd.Timestamp("%04d-%s" % (year, dt.strftime("%m-%d"))) 
+
+            for day_shift in range(-5, 6):
                 
-                if not result['need_work']:
-                    print("File `%s` already exist. Skip it." % (result['output_file'],))
-                    continue
-                
-                input_args.append((details, False))
+                dt_used = center_dt + pd.Timedelta(days=day_shift)
+                print("Loading clim files: ", dt_used)
+                _ds = PRISM_tools.loadDatasetWithTime(dt_used).isel(time=0)
+                PRISM_clim.append(regrid(PRISM_avg_info, _ds["total_precipitation"].to_numpy()))
 
-    with Pool(processes=args.nproc) as pool:
+        PRISM_clim = np.stack(PRISM_clim, axis=0)
+        print("Shape of PRISM_clim = ", PRISM_clim.shape)
 
-        results = pool.starmap(doJob, input_args)
+        clim_mu = np.mean(PRISM_clim, axis=0)
+        clim_sig = np.std(PRISM_clim, axis=0, ddof=1)
+        clim_sig[clim_sig==0] = np.nan
 
-        for i, result in enumerate(results):
-            if result['status'] != 'OK':
-                print(result)
-                print('!!! Failed to generate output file %s.' % (str(result['output_file']),))
-                failed_dates.append(result['details'])
+        data["clim_mu"].append(clim_mu)
+        data["clim_sig"].append(clim_sig)
+        data["clim_CRPS"].append(CRPS_tools.CRPS_gaussian(clim_mu, clim_sig, data_PRISM))
 
 
-    print("Tasks finished.")
-
-    print("Failed output files: ")
-    for i, failed_detail in enumerate(failed_dates):
-        print("%d : " % (i+1), failed_detail)
-
-    print("Done.")    

@@ -92,7 +92,7 @@ def work(details):
         label = f"({dataset:s}, {region:s})"
         print(f"Doing (dataset, region) = {label:s}")
         _mask = make_mask_with_shape_new(llon, llat, polygon)
-        _mask[ocn_idx] = 0
+        #_mask[ocn_idx] = 0
         result["output"] = _mask
         result["status"] = "OK"
        
@@ -117,13 +117,14 @@ if __name__ == "__main__":
     parser.add_argument('--test-ERA5-file', type=str, default=None)
     parser.add_argument('--test-WRF-file', type=str, default=None)
     parser.add_argument('--test-PRISM-file', type=str, default=None)
+    parser.add_argument('--test-regridded-file', type=str, default=None)
     parser.add_argument('--output', type=str, required=True)
     parser.add_argument('--nproc', type=int, default=1)
     args = parser.parse_args()
     print(args)
 
 
-    model_has_file = { model : getattr(args, "test_%s_file" % (model,)) is not None for model in ["ERA5", "WRF", "PRISM"] }
+    model_has_file = { model : getattr(args, "test_%s_file" % (model,)) is not None for model in ["ERA5", "WRF", "PRISM", "regridded"] }
 
     if np.all( [ (not has_file) for _, has_file in model_has_file.items() ] ) :
 
@@ -307,6 +308,40 @@ if __name__ == "__main__":
             wgt  = wgt_WRF,
             ocn_idx = ocn_idx_WRF,
             mask = mask_WRF,
+        )
+
+    # === regridded ====
+    if model_has_file["regridded"]:
+        ds_regridded = xr.open_dataset(args.test_regridded_file).isel(time=0, ens=0)
+
+        full_mask_regridded = xr.ones_like(ds_regridded["SST"]).astype(int)
+        lnd_mask_regridded = xr.zeros_like(ds_regridded["SST"])
+        lnd_idx_regridded = lnd_mask_regridded == 1
+        ocn_idx_regridded = lnd_mask_regridded == 0
+
+
+        # Copy is necessary so that the value can be assigned later
+        mask_regridded = xr.zeros_like(full_mask_regridded).expand_dims(
+            dim = dict(region=regions),
+            axis=0,
+        ).rename("mask_regridded").copy()
+
+        mask_regridded = mask_regridded.rename({"lat" : "lat_regridded", "lon": "lon_regridded"})
+         
+        lat_regridded = ds_regridded.coords["lat"].to_numpy()
+        lon_regridded = cvt_to_np180(ds_regridded.coords["lon"].to_numpy())
+        llat_regridded, llon_regridded = np.meshgrid(lat_regridded, lon_regridded, indexing='ij')
+        wgt_regridded =  xr.ones_like(mask_regridded).rename("wgt_regridded")
+
+        print(lat_regridded)
+        print(lon_regridded)
+
+        infos["regridded"] = dict(
+            llat = llat_regridded,
+            llon = llon_regridded,
+            wgt  = wgt_regridded,
+            ocn_idx = ocn_idx_regridded,
+            mask = mask_regridded,
         )
 
 

@@ -35,10 +35,10 @@ def parseRanges(input_str):
 
 def parseExpblob(expblob_str):
     
-    expsets = expblob.split("|")
+    expsets = expblob_str.split("|")
 
     results = []
-    for expset in expset:
+    for expset in expsets:
         print(expset)
         expname, group, ens_rng = expset.split("/")
         
@@ -101,4 +101,42 @@ def loadGroup(expname, group, ens_ids, varname, dt, root="."):
     ds = xr.open_mfdataset(files)
 
     return ds
+
+"""
+def loadExpblob(expblob, varname, dt, root="."):
+    
+    merge_data = []
+    for (expname, group, ens_ids) in expblob:
+        ds = loadGroup(expname, group, ens_ids, varname, dt, root=root)[varname]
+        merge_data.append(ds)
+        
+    new_ds = xr.merge(merge_data)
+    
+    return new_ds
+"""
+
+def loadExpblob(expblob, varname, dt, root=root, verbose=True):
+    
+    expsets = WRF_ens_tools.parseExpblob(expblob)
+   
+    ds = [] 
+    ens_cnt = 0
+    for expname, group, ens_rng in expsets:
+
+        if verbose:
+            print("Expname/group : %s/%s" % (expname, group))            
+            print("Ensemble ids: %s" % ( ",".join(["%d" % i for i in ens_rng] ) ) )
+            print("Load %s - %s" % (expname, group,)) 
+
+        _ds = loadGroup(expname, group, ens_rng, varname, dt, root=input_root)
+        _ds = _ds.assign_coords({"ens" : np.arange(_ds.dims["ens"]) + ens_cnt})
+        ds.append(_ds)
+
+        ens_cnt += _ds.dims["ens"]
+
+    da = xr.merge(ds).transpose("ens", "time", "lat", "lon")[varname]
+
+
+
+
 
