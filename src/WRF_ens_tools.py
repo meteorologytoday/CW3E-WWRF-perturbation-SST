@@ -1,6 +1,8 @@
 from pathlib import Path
 import re
 import xarray as xr
+import numpy as np
+
 def parseVarname(varname_long):
     
     m = re.match(r'(?P<varname>\w+)(::(?P<level>[0-9]+))?', varname_long)
@@ -115,9 +117,9 @@ def loadExpblob(expblob, varname, dt, root="."):
     return new_ds
 """
 
-def loadExpblob(expblob, varname, dt, root=root, verbose=True):
+def loadExpblob(expblob, varname, dt, root=".", verbose=True):
     
-    expsets = WRF_ens_tools.parseExpblob(expblob)
+    expsets = parseExpblob(expblob)
    
     ds = [] 
     ens_cnt = 0
@@ -128,7 +130,7 @@ def loadExpblob(expblob, varname, dt, root=root, verbose=True):
             print("Ensemble ids: %s" % ( ",".join(["%d" % i for i in ens_rng] ) ) )
             print("Load %s - %s" % (expname, group,)) 
 
-        _ds = loadGroup(expname, group, ens_rng, varname, dt, root=input_root)
+        _ds = loadGroup(expname, group, ens_rng, varname, dt, root=root)
         _ds = _ds.assign_coords({"ens" : np.arange(_ds.dims["ens"]) + ens_cnt})
         ds.append(_ds)
 
@@ -137,6 +139,6 @@ def loadExpblob(expblob, varname, dt, root=root, verbose=True):
     da = xr.merge(ds).transpose("ens", "time", "lat", "lon")[varname]
 
 
-
+    return da
 
 

@@ -3,7 +3,7 @@
 nproc=40
  
 source 60_verification_setup.sh
-source 98_trapkill.sh
+source 999_trapkill.sh
 
 wrfout_data_interval=$(( 3600 * 6 ))
 
@@ -11,8 +11,10 @@ varnames="TTL_RAIN IWV PH::200 WND::200 PH::850 WND::850 PSFC SST T2 IVT"
 #varnames="TTL_RAIN"
 
 varnames="SST TTL_RAIN IWV IVT PSFC"
-
+varnames="IWV Q2 TTL_RAIN"
 nparams=3
+
+for dx in 2.0 ; do
 for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
 
     expname="${WRF_params[$(( i * $nparams + 0 ))]}"
@@ -22,9 +24,11 @@ for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
     echo ":: expname = $expname"
     echo ":: group   = $group"
     echo ":: ens_ids = $ens_ids"
+
+    regrid_file=$gendata_dir/regrid_idx_dx${dx}.nc
     
     input_WRF_root=$WRF_archived_root
-    output_root=$wrf_regrid_dir
+    output_root=$wrf_regrid_root/dx$dx
     
     python3 src/gen_regrid_wrf.py                        \
         --nproc $nproc                                   \
@@ -44,6 +48,6 @@ for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
         --varnames $varnames 
 
 done
-
+done
 
 echo "Done."

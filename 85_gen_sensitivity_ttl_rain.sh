@@ -14,28 +14,33 @@ target_varnames=(
 )
 
 sens_varnames=(
-    "Q2"
+#    "Q2"
+    "TTL_RAIN"
     "T2"
 )
 
 params=(
-    "2023-01-07" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"   34.0 36.0 239 241
+#    "2023-01-11" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"   34.0 36.0 239 241
+    "2023-01-12" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"   34.0 36.0 239 241
+
 )
 
-nparams=8
+nparams=9
 for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     
-    exp_beg_time="${params[$(( i * $nparams + 0 ))]}"
-    expblob="${params[$(( i * $nparams + 1 ))]}"
-    output_dir="${params[$(( i * $nparams + 2 ))]}"
-    output_prefix="${params[$(( i * $nparams + 3 ))]}"
+    sens_time="${params[$(( i * $nparams + 0 ))]}"
+    target_time="${params[$(( i * $nparams + 1 ))]}"
+    expblob="${params[$(( i * $nparams + 2 ))]}"
+    output_dir="${params[$(( i * $nparams + 3 ))]}"
+    output_prefix="${params[$(( i * $nparams + 4 ))]}"
  
-    target_lat_beg="${params[$(( i * $nparams + 4 ))]}"
-    target_lat_end="${params[$(( i * $nparams + 5 ))]}"
-    target_lon_beg="${params[$(( i * $nparams + 6 ))]}"
-    target_lon_end="${params[$(( i * $nparams + 7 ))]}"
+    target_lat_beg="${params[$(( i * $nparams + 5 ))]}"
+    target_lat_end="${params[$(( i * $nparams + 6 ))]}"
+    target_lon_beg="${params[$(( i * $nparams + 7 ))]}"
+    target_lon_end="${params[$(( i * $nparams + 8 ))]}"
 
-    echo ":: exp_beg_time      = $exp_beg_time"
+    echo ":: sens_time         = $sens_time"
+    echo ":: target_time       = $target_time"
     echo ":: expblob           = $expblob"
     echo ":: output_dir        = $output_dir"
     echo ":: output_prefix     = $output_prefix"

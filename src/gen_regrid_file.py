@@ -53,7 +53,7 @@ if __name__ == "__main__":
     print("max_lat_idx: ", max_lat_idx)
     print("max_lon_idx: ", max_lon_idx)
     
-    WRF_ds = xr.open_dataset(args.WRF_file)
+    WRF_ds = xr.open_dataset(args.WRF_file, engine="netcdf4")
     
     WRF_llat = WRF_ds.coords["XLAT"].isel(Time=0).to_numpy()
     WRF_llon = WRF_ds.coords["XLONG"].isel(Time=0).to_numpy() % 360.0

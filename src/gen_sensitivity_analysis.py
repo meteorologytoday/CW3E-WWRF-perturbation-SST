@@ -20,6 +20,7 @@ from scipy import sparse
 import WRF_ens_tools
 
 import re
+import matrix_helper
 
 def doJob(details, detect_phase=False):
 
@@ -47,10 +48,12 @@ def doJob(details, detect_phase=False):
         output_dir     = Path(details["output_dir"]) 
         output_prefix   = details["output_prefix"] 
         
-        output_file = output_dir / ("sensitivity_%s_%s_%s.nc" % (
+        output_file = output_dir / ("sensitivity_%s_sens-%s-%s_target-%s-%s.nc" % (
             output_prefix,
-            varname,
+            sens_dt.strftime("%Y-%m-%d_%H"),
+            sens_varname,
             target_dt.strftime("%Y-%m-%d_%H"),
+            target_varname,
         ))
         
         # Detecting
@@ -72,17 +75,18 @@ def doJob(details, detect_phase=False):
 
             return result
         
-        print("##### Doing time: ", target_time)
+        print("##### Doing time: ", target_dt)
         
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        target_da = WRF_ens_tools.loadExpblob(expblob, target_varname, target_time, root=input_root).isel(time=0) 
-        sens_da   = WRF_ens_tools.loadExpblob(expblob, sens_varname,   sens_time,   root=input_root).isel(time=0)
+        target_da = WRF_ens_tools.loadExpblob(expblob, target_varname, target_dt, root=input_root).isel(time=0) 
+        sens_da   = WRF_ens_tools.loadExpblob(expblob, sens_varname,   sens_dt,   root=input_root).isel(time=0)
         
         # average target_da
 
         # do correlation       
-
+        lat = target_da.coords["lat"]
+        lon = target_da.coords["lon"]
         box_rng = (
             (lat >= target_lat_rng[0]) &
             (lat <  target_lat_rng[1]) &
@@ -94,15 +98,108 @@ def doJob(details, detect_phase=False):
             dim=["lat", "lon"], skipna=True,
         )
 
-        da_corr = xr.corr(target_da, sens_da, dim="ens",)
-       
-        print("correlation dataarray = ", da_corr) 
+        #
+        # Mathematical basis:
+        #
+        # y = G.T * f
+        #
+        # where y = response, f = forcing
+        #
+        # for example, y is the rainfall, f is the moisture,
+        # G is the green's function. Each column vector of G
+        # is a delta response map to forcing
+        #
+        # Then, we have
+        # y * fT = G.T * (f * fT)
+        # or 
+        # (f * fT) * G = f * yT
+        # Therefore, 
+        #
+        # G = (f * yT) / ( f * fT )
+        #
+        
+        coords = sens_da.coords
+        Ne = len(coords["ens"])
+        Nx = len(coords["lon"])
+        Ny = len(coords["lat"])
+
+        # First construct reduced matrix
+        mask = np.isfinite(sens_da.isel(ens=0).transpose("lat", "lon").to_numpy().flatten())
+        invalid_mask = np.isnan(sens_da.isel(ens=0).transpose("lat", "lon").to_numpy())
+
+        valid_pts = np.sum(mask)
+        reduce_mtx = matrix_helper.constructSubspaceWith(mask)
+
+        # construct f and y
+        f_full = sens_da.transpose("ens", "lat", "lon").to_numpy().reshape(
+            (Ne, Ny * Nx)
+        ).transpose()
+        f_full[np.isnan(f_full)] = 0.0 # need to remove nan otherwise the multiplication gets nan
+        f = reduce_mtx @ f_full
+        
+        y = target_da.to_numpy().reshape((1, -1))
+        
+        # remove ensemble mean
+        f = f - f.mean(axis=1, keepdims=True)
+        y = y - y.mean(axis=1, keepdims=True)
+        
+        # compute forcing correlation
+        ffT = f @ f.T
+        
+        # comptue left hand side
+        fyT = f @ y.T
+        fyT_full = reduce_mtx.T @ fyT
+        
+        # compute Green's function
+        inverse_exists = True
+        try:
+            print("Solving (ffT) G = fyT")
+            print("ffT.shape = ", ffT.shape)
+            print("fyT.shape = ", fyT.shape)
+            G = np.linalg.solve(ffT, fyT)
+            
+            G_full = reduce_mtx.T * G
+            G_full = G_full.reshape( ( Ny, Nx ) )
+            G_full[invalid_mask] = np.nan
+            
+        except Exception as e:
+            inverse_exists = False
+            print("Error occurs when solving matrix")
+            print(e)
+
+        
+        G_map = None
+        if inverse_exists:
+            G_map = xr.DataArray(
+                name = "GreenFunc",
+                data = G_full.reshape( ( Ny, Nx ) ),
+                dims = ("lat", "lon"),
+                coords = dict(
+                    lat = coords["lat"],
+                    lon = coords["lon"],
+                ),
+            )
+
+        ds_output = xr.Dataset(
+            data_vars = dict(
+                fyT = (["lat", "lon"], fyT_full.reshape( (Ny, Nx) )),
+                ffT = (["allpts", "allpts"], ffT),
+            ),
+            coords = dict(
+                lat = coords["lat"],
+                lon = coords["lon"],
+            ),
+        ) 
+        
+        if G_map is not None:
+            ds_output = xr.merge([ds_output, G_map])
+
+        print("correlation dataarray = ", ds_output) 
         print("Saving output: ", output_file)
-        da_corr.to_netcdf(output_file)
+        ds_output.to_netcdf(output_file)
 
         if output_file.exists():
             print("File `%s` is generated." % (str(output_file),))
-
 
         result['status'] = 'OK'
 
@@ -139,8 +236,8 @@ if __name__ == "__main__":
     print(args)
  
     details = dict(
-        target_varname = target_varname,
-        sens_varname   = sens_varname,
+        target_varname = args.target_varname,
+        sens_varname   = args.sens_varname,
         target_dt      = pd.Timestamp(args.target_time),
         sens_dt        = pd.Timestamp(args.sens_time),
         input_root     = args.input_root,
