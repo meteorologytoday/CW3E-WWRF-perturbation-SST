@@ -35,8 +35,8 @@ def computeBoxIndex(llat, llon, lat_rng, lon_rng, dlat, dlon):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--WRF-file', type=str, help='WRF file that provide XLAT and XLONG.', required=True)
-    parser.add_argument('--PRISM-file', type=str, help='PRISM file that provide XLAT and XLONG.', required=True)
+    parser.add_argument('--input-file', type=str, help='Can be WRF file that provide XLAT and XLONG, PRISM file, or a regrid file.', required=True)
+    parser.add_argument('--input-type', type=str, help='Can be `WRF`, `PRISM`, or `regrid`.', choices=["WRF", "PRISM", "regrid",], required=True)
     parser.add_argument('--output', type=str, help='WRF file that provide XLAT and XLONG.', required=True)
     parser.add_argument('--lat-rng', type=float, nargs=2, help="Latitudinal range.", default=[-90.0, 90.0])
     parser.add_argument('--lon-rng', type=float, nargs=2, help="Latitudinal range.", default=[0.0, 360.0])
@@ -52,46 +52,71 @@ if __name__ == "__main__":
     
     print("max_lat_idx: ", max_lat_idx)
     print("max_lon_idx: ", max_lon_idx)
-    
-    WRF_ds = xr.open_dataset(args.WRF_file, engine="netcdf4")
-    
-    WRF_llat = WRF_ds.coords["XLAT"].isel(Time=0).to_numpy()
-    WRF_llon = WRF_ds.coords["XLONG"].isel(Time=0).to_numpy() % 360.0
 
-    WRF_lat_idx, WRF_lon_idx, lat_regrid_bnds, lon_regrid_bnds = computeBoxIndex(WRF_llat, WRF_llon, args.lat_rng, args.lon_rng, args.dlat, args.dlon)
+    data_vars = dict()
+    coords = dict()
 
-    PRISM_ds = xr.open_dataset(args.PRISM_file)
-    PRISM_lat = PRISM_ds["lat"].to_numpy()
-    PRISM_lon = PRISM_ds["lon"].to_numpy() % 360.0
-    PRISM_llat, PRISM_llon = np.meshgrid(PRISM_lat, PRISM_lon, indexing='ij')
-    PRISM_lat_idx, PRISM_lon_idx, _, _ = computeBoxIndex(PRISM_llat, PRISM_llon, args.lat_rng, args.lon_rng, args.dlat, args.dlon)
-   
-    lat_regrid = ( lat_regrid_bnds[1:] + lat_regrid_bnds[:-1] ) / 2
-    lon_regrid = ( lon_regrid_bnds[1:] + lon_regrid_bnds[:-1] ) / 2
+
+    with xr.open_dataset(args.input_file, engine="netcdf4") as ds:
+
+        if args.input_type == "WRF":
+
+            llat = ds.coords["XLAT"].isel(Time=0).to_numpy()
+            llon = ds.coords["XLONG"].isel(Time=0).to_numpy() % 360.0
+
+            dims = ["south_north", "west_east"]
+            coords.update(dict(
+                XLAT = (dims, llat), 
+                XLONG = (dims, llon), 
+            ))
+           
+        elif args.input_type == "PRISM":
+            
+            lat = ds["lat"].to_numpy()
+            lon = ds["lon"].to_numpy() % 360.0
+            llat, llon = np.meshgrid(lat, lon, indexing='ij')
+            
+            dims = ["lat", "lon"]
+            coords.update(dict(
+                lat = (["lat"], lat), 
+                lon = (["lon"], lon), 
+            ))
+        
+        elif args.input_type == "regrid":
+
+            lat = ds["lat_regrid"].to_numpy()
+            lon = ds["lon_regrid"].to_numpy() % 360.0
+            llat, llon = np.meshgrid(lat, lon, indexing='ij')
  
-    new_ds = xr.Dataset(
-        data_vars = dict(
-            WRF_lat_idx = (["south_north", "west_east"], WRF_lat_idx),
-            WRF_lon_idx = (["south_north", "west_east"], WRF_lon_idx),
-            PRISM_lat_idx = (["lat", "lon"], PRISM_lat_idx),
-            PRISM_lon_idx = (["lat", "lon"], PRISM_lon_idx),
-            lat_regrid_bnd = (["lat_regrid_bnd",], lat_regrid_bnds),
-            lon_regrid_bnd = (["lon_regrid_bnd",], lon_regrid_bnds),
-            lat_regrid = (["lat_regrid",], lat_regrid),
-            lon_regrid = (["lon_regrid",], lon_regrid),
-        ),
-        coords = dict(
-            XLAT = (["south_north", "west_east"], WRF_llat),
-            XLONG = (["south_north", "west_east"], WRF_llon),
-            lat = (["lat"], PRISM_lat),
-            lon = (["lon"], PRISM_lon),
-        ),
-        attrs = dict(
-            nlat_box = max_lat_idx+1,
-            nlon_box = max_lon_idx+1,
-        )
-    )
+            dims = ["lat", "lon"]
+            coords.update(dict(
+                lat = (["lat"], lat), 
+                lon = (["lon"], lon), 
+            ))
 
-    print("Output file: %s" % (args.output,))
-    new_ds.to_netcdf(args.output)
-    
+
+        lat_idx, lon_idx, lat_regrid_bnds_, lon_regrid_bnds = computeBoxIndex(llat, llon, args.lat_rng, args.lon_rng, args.dlat, args.dlon)
+        
+ 
+        lat_regrid = ( lat_regrid_bnds[1:] + lat_regrid_bnds[:-1] ) / 2
+        lon_regrid = ( lon_regrid_bnds[1:] + lon_regrid_bnds[:-1] ) / 2
+     
+        new_ds = xr.Dataset(
+            data_vars = dict(
+                lat_idx = (dims, lat_idx),
+                lon_idx = (dims, lon_idx),
+                lat_regrid_bnd = (["lat_regrid_bnd",], lat_regrid_bnds),
+                lon_regrid_bnd = (["lon_regrid_bnd",], lon_regrid_bnds),
+                lat_regrid = (["lat_regrid",], lat_regrid),
+                lon_regrid = (["lon_regrid",], lon_regrid),
+            ),
+            coords = coords,
+            attrs = dict(
+                nlat_box = max_lat_idx+1,
+                nlon_box = max_lon_idx+1,
+            )
+        )
+
+        print("Output file: %s" % (args.output,))
+        new_ds.to_netcdf(args.output)
+        

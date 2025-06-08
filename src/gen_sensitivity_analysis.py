@@ -140,12 +140,15 @@ def doJob(details, detect_phase=False):
         y = target_da.to_numpy().reshape((1, -1))
         
         # remove ensemble mean
+        print("f.shape = ", f.shape)
+        print("y.shape = ", y.shape)
         f = f - f.mean(axis=1, keepdims=True)
         y = y - y.mean(axis=1, keepdims=True)
         
         # compute forcing correlation
         ffT = f @ f.T
-        
+       
+        print("FFT = ", ffT) 
         # comptue left hand side
         fyT = f @ y.T
         fyT_full = reduce_mtx.T @ fyT
@@ -153,10 +156,16 @@ def doJob(details, detect_phase=False):
         # compute Green's function
         inverse_exists = True
         try:
+            
             print("Solving (ffT) G = fyT")
             print("ffT.shape = ", ffT.shape)
             print("fyT.shape = ", fyT.shape)
-            G = np.linalg.solve(ffT, fyT)
+            r = np.linalg.matrix_rank(ffT)
+            print("Precomputed rank: %d (full: %d)" % (r, ffT.shape[0])) 
+
+
+            G = np.linalg.solve(ffT.copy(), fyT.copy())
+            #G = np.linalg.inv(ffT.copy()) @ fyT
             
             G_full = reduce_mtx.T * G
             G_full = G_full.reshape( ( Ny, Nx ) )
@@ -183,7 +192,7 @@ def doJob(details, detect_phase=False):
         ds_output = xr.Dataset(
             data_vars = dict(
                 fyT = (["lat", "lon"], fyT_full.reshape( (Ny, Nx) )),
-                ffT = (["allpts", "allpts"], ffT),
+                ffT = (["allpts1", "allpts2"], ffT),
             ),
             coords = dict(
                 lat = coords["lat"],

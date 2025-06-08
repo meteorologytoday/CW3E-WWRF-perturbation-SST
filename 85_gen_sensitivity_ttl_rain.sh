@@ -4,9 +4,12 @@ nproc=1
 
 source 000_setup.sh
 source 999_trapkill.sh
-    
-input_root=$regriddata_dir
-output_root=$gendata_dir/correlation
+
+
+
+dx=2.0 
+input_root=$regriddata_dir/dx${dx}
+output_root=$gendata_dir/correlation/dx${dx}
 
 
 target_varnames=(
@@ -14,14 +17,14 @@ target_varnames=(
 )
 
 sens_varnames=(
-#    "Q2"
+    "Q2"
+    "IWV"
     "TTL_RAIN"
-    "T2"
 )
 
 params=(
-#    "2023-01-11" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"   34.0 36.0 239 241
-    "2023-01-12" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"   34.0 36.0 239 241
+    "2023-01-08T12" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"   34.0 36.0 239 241
+#    "2023-01-12" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"   34.0 36.0 239 241
 
 )
 

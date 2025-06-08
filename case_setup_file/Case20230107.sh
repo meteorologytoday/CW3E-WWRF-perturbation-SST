@@ -12,7 +12,7 @@ output_PRISM=$output_dir/verification_PRISM.nc
 
 output_CRPS_dir=$output_dir/CRPS
 
-regrid_file=$gendata_dir/regrid_idx.nc
+
 
 
 # ===== WRF setting =====

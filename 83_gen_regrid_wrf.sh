@@ -1,11 +1,11 @@
 #!/bin/bash
 
-nproc=40
+nproc=10
  
 source 60_verification_setup.sh
 source 999_trapkill.sh
 
-wrfout_data_interval=$(( 3600 * 6 ))
+wrfout_data_interval=$(( 3600 * 24 ))
 
 varnames="TTL_RAIN IWV PH::200 WND::200 PH::850 WND::850 PSFC SST T2 IVT"
 #varnames="TTL_RAIN"
