@@ -95,7 +95,7 @@ if __name__ == "__main__":
             ))
 
 
-        lat_idx, lon_idx, lat_regrid_bnds_, lon_regrid_bnds = computeBoxIndex(llat, llon, args.lat_rng, args.lon_rng, args.dlat, args.dlon)
+        lat_idx, lon_idx, lat_regrid_bnds, lon_regrid_bnds = computeBoxIndex(llat, llon, args.lat_rng, args.lon_rng, args.dlat, args.dlon)
         
  
         lat_regrid = ( lat_regrid_bnds[1:] + lat_regrid_bnds[:-1] ) / 2
@@ -112,8 +112,8 @@ if __name__ == "__main__":
             ),
             coords = coords,
             attrs = dict(
-                nlat_box = max_lat_idx+1,
-                nlon_box = max_lon_idx+1,
+                nlat_box = len(lat_regrid),
+                nlon_box = len(lon_regrid),
             )
         )
 

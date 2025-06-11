@@ -18,6 +18,7 @@ import PRISM_tools
 import cmocean
 from scipy import sparse
 import WRF_ens_tools
+import regrid_tools
 
 import re
 import matrix_helper
@@ -28,11 +29,19 @@ def doJob(details, detect_phase=False):
     result = dict(details = details, status="UNKNOWN", need_work=False, detect_phase=detect_phase)
 
     try:
-        
+       
+ 
 
         # This is the target variable, such as total rainfall
         target_dt = details["target_dt"]
         target_varname = details["target_varname"]
+
+
+        
+        target_mask_type   = details["target_mask_type"]
+        target_mask_file   = details["target_mask_file"]
+        target_mask_file_regions = np.array(details["target_mask_file_regions"])
+
  
         # This lat-lon range applies to target
         target_lat_rng     = details["target_lat_rng"]
@@ -41,6 +50,7 @@ def doJob(details, detect_phase=False):
         # This is the sensitivity variable, such as initial moisture
         sens_dt = details["sens_dt"]
         sens_varname = details["sens_varname"]
+        sens_regrid_file = details["sens_regrid_file"]
 
         input_root  = Path(details["input_root"])
         expblob     = details["expblob"]
@@ -78,25 +88,77 @@ def doJob(details, detect_phase=False):
         print("##### Doing time: ", target_dt)
         
         output_file.parent.mkdir(parents=True, exist_ok=True)
+    
+        # Load regrid file for sensitivity 
+        sens_avg_info = regrid_tools.constructAvgMtxFromFile(sens_regrid_file)
 
-        target_da = WRF_ens_tools.loadExpblob(expblob, target_varname, target_dt, root=input_root).isel(time=0) 
+
+        print("Loading sens_da")
         sens_da   = WRF_ens_tools.loadExpblob(expblob, sens_varname,   sens_dt,   root=input_root).isel(time=0)
-        
+
+
+        regridded_sens_data = regrid_tools.regrid(sens_avg_info, sens_da.to_numpy())
+
+
+        regridded_sens_da = xr.DataArray(
+            name = "regridded_sens_da",
+            data = regridded_sens_data,
+            dims = ("ens", "lat", "lon"),
+            coords = dict(
+                lat = sens_avg_info["lat_regrid"],
+                lon = sens_avg_info["lon_regrid"],
+                ens = sens_da.coords["ens"],
+            )
+        )
+
+        print("regridded_sens_data : ", regridded_sens_data)
+
+        print("Loading target_da")
+        target_da = WRF_ens_tools.loadExpblob(expblob, target_varname, target_dt, root=input_root).isel(time=0) 
         # average target_da
+        if target_mask_type == "latlon_rng":
+            
+            lat = target_da.coords["lat"]
+            lon = target_da.coords["lon"]
+            box_rng = (
+                (lat >= target_lat_rng[0]) &
+                (lat <  target_lat_rng[1]) &
+                (lon >= target_lon_rng[0]) &
+                (lon <  target_lon_rng[1])
+            )
 
-        # do correlation       
-        lat = target_da.coords["lat"]
-        lon = target_da.coords["lon"]
-        box_rng = (
-            (lat >= target_lat_rng[0]) &
-            (lat <  target_lat_rng[1]) &
-            (lon >= target_lon_rng[0]) &
-            (lon <  target_lon_rng[1])
-        )
+            target_da = target_da.where(box_rng).mean(
+                dim=["lat", "lon"], skipna=True,
+            ).expand_dims(dim="region", axis=0)
+            
+        elif target_mask_type == "mask_file":
+            print("Using mask_file: ", target_mask_file)
+            mask_da = xr.open_dataset(target_mask_file)["mask_regridded"].rename(
+                {
+                    'lat_regridded': 'lat',
+                    'lon_regridded': 'lon',
+                }
+            )
+            if target_mask_file_regions is not None:
+                #print(mask_da)
+                mask_da = mask_da.sel(region=target_mask_file_regions)
+                #print(mask_da)
+            
+                
+            target_da = target_da.expand_dims(dim={"region": mask_da.coords["region"]}, axis=0)
+            target_da = target_da.where(mask_da == 1).mean(dim=["lat", "lon"], skipna=True)
 
-        target_da = target_da.where(box_rng).mean(
-            dim=["lat", "lon"], skipna=True,
-        )
+            #for region in mask_da.coords["region"]:
+            #    print("region = ", str(region.values))
+            #    _mask = mask_da.sel(region=region)
+            #    avg_da = target_da.where(_mask == 1).mean(dim=["lat", "lon"], skipna=True).expand_dims(dim={"region": [region,]}, axis=0)
+            #    print("avg_da = ", avg_da)
+
+            #    _tmp.append(avg_da)
+            
+            #target_da = xr.merge(_tmp).rename("target_da")
+            #print(target_da)
+
 
         #
         # Mathematical basis:
@@ -117,93 +179,113 @@ def doJob(details, detect_phase=False):
         #
         # G = (f * yT) / ( f * fT )
         #
-        
-        coords = sens_da.coords
+        coords = regridded_sens_da.coords
         Ne = len(coords["ens"])
         Nx = len(coords["lon"])
         Ny = len(coords["lat"])
 
         # First construct reduced matrix
-        mask = np.isfinite(sens_da.isel(ens=0).transpose("lat", "lon").to_numpy().flatten())
-        invalid_mask = np.isnan(sens_da.isel(ens=0).transpose("lat", "lon").to_numpy())
+        # the mask here are used to remove nan points
+        mask = np.isfinite(regridded_sens_da.isel(ens=0).transpose("lat", "lon").to_numpy().flatten())
+        invalid_mask = np.isnan(regridded_sens_da.isel(ens=0).transpose("lat", "lon").to_numpy())
 
         valid_pts = np.sum(mask)
         reduce_mtx = matrix_helper.constructSubspaceWith(mask)
 
         # construct f and y
-        f_full = sens_da.transpose("ens", "lat", "lon").to_numpy().reshape(
+        f_full = regridded_sens_da.transpose("ens", "lat", "lon").to_numpy().reshape(
             (Ne, Ny * Nx)
         ).transpose()
         f_full[np.isnan(f_full)] = 0.0 # need to remove nan otherwise the multiplication gets nan
         f = reduce_mtx @ f_full
-        
-        y = target_da.to_numpy().reshape((1, -1))
-        
+            
         # remove ensemble mean
-        print("f.shape = ", f.shape)
-        print("y.shape = ", y.shape)
         f = f - f.mean(axis=1, keepdims=True)
-        y = y - y.mean(axis=1, keepdims=True)
-        
-        # compute forcing correlation
-        ffT = f @ f.T
-       
-        print("FFT = ", ffT) 
-        # comptue left hand side
-        fyT = f @ y.T
-        fyT_full = reduce_mtx.T @ fyT
-        
-        # compute Green's function
-        inverse_exists = True
-        try:
-            
-            print("Solving (ffT) G = fyT")
-            print("ffT.shape = ", ffT.shape)
-            print("fyT.shape = ", fyT.shape)
-            r = np.linalg.matrix_rank(ffT)
-            print("Precomputed rank: %d (full: %d)" % (r, ffT.shape[0])) 
+        print("f.shape = ", f.shape)
 
+        ds_output = []
+        for region in target_da.coords["region"]:
 
-            G = np.linalg.solve(ffT.copy(), fyT.copy())
-            #G = np.linalg.inv(ffT.copy()) @ fyT
-            
-            G_full = reduce_mtx.T * G
-            G_full = G_full.reshape( ( Ny, Nx ) )
-            G_full[invalid_mask] = np.nan
-            
-        except Exception as e:
-            inverse_exists = False
-            print("Error occurs when solving matrix")
-            print(e)
+            region_str = str(region.values)
+            print("Doing region:", region_str)
+            #print(target_da)
+            _target_da = target_da.sel(region=region)
 
-        
-        G_map = None
-        if inverse_exists:
+            y = _target_da.to_numpy().reshape((1, -1))
+            
+            # remove ensemble mean
+
+            print("y.shape = ", y.shape)
+            y = y - y.mean(axis=1, keepdims=True)
+            
+            # compute forcing correlation
+            ffT = f @ f.T
+           
+            #print("f*f^T = ", ffT) 
+            # comptue left hand side
+            fyT = f @ y.T
+            fyT_full = reduce_mtx.T @ fyT
+            
+            # compute Green's function
+            inverse_exists = True
+            G_full = None
+            try:
+                
+
+                print("ffT.shape = ", ffT.shape)
+                print("fyT.shape = ", fyT.shape)
+                
+                r = np.linalg.matrix_rank(ffT)
+                print("Precomputed rank: %d" % (r,)) 
+                
+                print("Solving (ffT) G = fyT")
+                # G = greens function (column vectors are responses)
+                G = np.linalg.solve(ffT.copy(), fyT.copy())
+                #G = np.linalg.inv(ffT.copy()) @ fyT
+                
+                G_full = reduce_mtx.T * G
+                G_full = G_full.reshape( ( Ny, Nx ) )
+                G_full[invalid_mask] = np.nan
+                
+            except Exception as e:
+                inverse_exists = False
+                print("Error occurs when solving matrix")
+                print(str(e))
+
+            
+            if G_full is None: # no inverse
+                G_full = np.zeros((Ny, Nx))
+                G_full[:] = np.nan
+                
+            """
             G_map = xr.DataArray(
                 name = "GreenFunc",
-                data = G_full.reshape( ( Ny, Nx ) ),
-                dims = ("lat", "lon"),
+                data = G_full.reshape( (1, Ny, Nx ) ),
+                dims = ("region", "lat", "lon"),
                 coords = dict(
+                    region = [region, ],
                     lat = coords["lat"],
                     lon = coords["lon"],
                 ),
             )
-
-        ds_output = xr.Dataset(
-            data_vars = dict(
-                fyT = (["lat", "lon"], fyT_full.reshape( (Ny, Nx) )),
-                ffT = (["allpts1", "allpts2"], ffT),
-            ),
-            coords = dict(
-                lat = coords["lat"],
-                lon = coords["lon"],
-            ),
-        ) 
+            """
         
-        if G_map is not None:
-            ds_output = xr.merge([ds_output, G_map])
+            ds_output.append(xr.Dataset(
+                data_vars = dict(
+                    GreenFunc = (["region", "lat", "lon"], G_full.reshape( (1, Ny, Nx ) )),
+                    fyT = (["region", "lat", "lon"], fyT_full.reshape( (1, Ny, Nx) )),
+                    ffT = (["region", "allpts1", "allpts2"], ffT.reshape((1, *ffT.shape))),
+                ),
+                coords = dict(
+                    region = np.array([region_str, ]),
+                    lat = (["lat"], coords["lat"].to_numpy()),
+                    lon = (["lon"], coords["lon"].to_numpy()),
+                ),
+            ))
 
-        print("correlation dataarray = ", ds_output) 
+        ds_output = xr.merge(ds_output)#.set_coords(["lat", "lon"])
+        
+        print("Result: ", ds_output)
         print("Saving output: ", output_file)
         ds_output.to_netcdf(output_file)
 
@@ -230,11 +312,15 @@ if __name__ == "__main__":
     parser.add_argument('--expblob', type=str, help='Input directories.', required=True)
     parser.add_argument('--target-varname', type=str, help='analysis beg time', required=True)
     parser.add_argument('--target-time', type=str, help='analysis beg time', required=True)
+    parser.add_argument('--sens-regrid-file', type=str, help='Sensitivity\'s regrid file', required=True)
     parser.add_argument('--sens-varname', type=str, help='analysis beg time', required=True)
     parser.add_argument('--sens-time', type=str, help='analysis beg time', required=True)
-
-    parser.add_argument('--target-lat-rng', type=float, nargs=2, help="Latitude range for box. It is used if `--corr-type` is 'remote'. ", default=[-90.0, 90.0])
-    parser.add_argument('--target-lon-rng', type=float, nargs=2, help="Longitudinal range for box. It is used if `--corr-type` is 'remote'.", default=[0.0, 360.0])
+    
+    parser.add_argument('--target-mask-type', type=str, help='analysis beg time', required=True, choices=["latlon_rng", "mask_file"])
+    parser.add_argument('--target-mask-file', type=str, help='analysis beg time', default=None)
+    parser.add_argument('--target-mask-file-regions', type=str, nargs="+", help='Regions to be diagnosed. If none is provided, then means all regions will be applied', default=None)
+    parser.add_argument('--target-lat-rng', type=float, nargs=2, help="Latitude range for box. It is used if `--target-mask-type` is 'latlon_rng'. ", default=[-90.0, 90.0])
+    parser.add_argument('--target-lon-rng', type=float, nargs=2, help="Longitudinal range for box. It is used if `--target-mask-type` is 'latlon_rng'. ", default=[0.0, 360.0])
  
     parser.add_argument('--output-dir', type=str, help='Output filename in nc file.', required=True)
     parser.add_argument('--output-prefix', type=str, help='analysis beg time', required=True)
@@ -245,7 +331,9 @@ if __name__ == "__main__":
     print(args)
  
     details = dict(
+
         target_varname = args.target_varname,
+        sens_regrid_file = args.sens_regrid_file,
         sens_varname   = args.sens_varname,
         target_dt      = pd.Timestamp(args.target_time),
         sens_dt        = pd.Timestamp(args.sens_time),
@@ -253,6 +341,10 @@ if __name__ == "__main__":
         expblob        = args.expblob,
         output_dir     = args.output_dir,
         output_prefix  = args.output_prefix,
+
+        target_mask_type = args.target_mask_type,
+        target_mask_file = args.target_mask_file,
+        target_mask_file_regions = args.target_mask_file_regions,
         target_lat_rng = args.target_lat_rng,
         target_lon_rng = args.target_lon_rng,
     )

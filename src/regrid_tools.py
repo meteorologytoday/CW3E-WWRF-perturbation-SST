@@ -3,6 +3,27 @@ import numpy as np
 from pathlib import Path
 from scipy import sparse
 
+def constructAvgMtxFromFile(regrid_file):
+    ds_regrid = xr.open_dataset(regrid_file)
+    lat_idx = ds_regrid["lat_idx"].to_numpy()
+    lon_idx = ds_regrid["lon_idx"].to_numpy()
+
+    lat_regrid = ds_regrid["lat_regrid"].to_numpy()   
+    lon_regrid = ds_regrid["lon_regrid"].to_numpy()   
+
+    avg_info   = constructAvgMtx(lat_idx,   lon_idx,   len(lat_regrid), len(lon_regrid))
+    
+    avg_info.update(dict(
+        lat_regrid = lat_regrid,
+        lon_regrid = lon_regrid,
+    ))
+
+    return avg_info
+
+   
+    
+
+
 def constructAvgMtx(lat_idx, lon_idx, nbox_lat, nbox_lon):
      
     Ny, Nx = lat_idx.shape
@@ -60,7 +81,8 @@ def constructAvgMtx(lat_idx, lon_idx, nbox_lat, nbox_lon):
     return regrid_info
 
 def regrid(regrid_info, arr):
-   
+  
+    print("Shape of original array: ", arr.shape) 
     if len(arr.shape) == 3:
         
         print("The input array is three dimension. Treating the first dimenion as the time")
@@ -77,7 +99,8 @@ def regrid(regrid_info, arr):
     flattened_arr = np.array(arr).flatten()
 
     if len(flattened_arr) != regrid_info["shape_original"][0] * regrid_info["shape_original"][1]:
-        print(regrid_info["shape_original"], "; ", arr.shape)
+        print("Expected array shape from info provided: ", regrid_info["shape_original"])
+        print("Actual input arr shape, ", arr.shape)
         raise Exception("Dimension of input array does not match avg_info.")
     
     result = regrid_info["avg_mtx"] @ np.array(arr).flatten()

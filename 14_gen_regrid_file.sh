@@ -9,7 +9,7 @@ PRISM_file=/data/SO3/t2hsu/data/PRISM/PRISM_stable_4kmD1/PRISM-ppt-1981-01-01.nc
 
 for dx in 0.5 ; do
 
-    output_dir=$gendata_dir/dx${dx}
+    output_dir=$gendata_dir/regrid_idx/dx${dx}
 
     mkdir -p $output_dir
 
@@ -31,23 +31,30 @@ for dx in 0.5 ; do
         --dlat $dx                 \
         --dlon $dx                 \
         --output $output_dir/regrid_idx_dx${dx}_PRISM2mygrid.nc
+
     
+    sens_dx=6.0
     python3 src/gen_regrid_file.py \
         --input-file $output_WRF2mygrid_file   \
         --input-type "regrid"       \
-        --lat-rng    0    70       \
-        --lon-rng    170  250      \
-        --dlat $dx                 \
-        --dlon $dx                 \
-        --output $output_dir/regrid_idx_dx${dx}_mygrid2sengrid_ocn.nc
+        --lat-rng    20    50       \
+        --lon-rng    204  240       \
+        --dlat $sens_dx             \
+        --dlon $sens_dx             \
+        --output $output_dir/regrid_idx_sensdx${sens_dx}_mygrid2sengrid_ocn.nc
+
+    sens_dx=4.5
+    sens_dy=3.0
+    python3 src/gen_regrid_file.py \
+        --input-file $output_WRF2mygrid_file   \
+        --input-type "regrid"       \
+        --lat-rng    20    50       \
+        --lon-rng    156  240       \
+        --dlat $sens_dy             \
+        --dlon $sens_dx             \
+        --output $output_dir/regrid_idx_sensdx${sens_dx}_sensdy${sens_dy}_mygrid2sengrid_ocn.nc
+
+
  
-    python3 src/gen_regrid_file.py \
-        --input-file $output_WRF2mygrid_file   \
-        --input-type "regrid"       \
-        --lat-rng    0    70       \
-        --lon-rng    170  250      \
-        --dlat $dx                 \
-        --dlon $dx                 \
-        --output $output_dir/regrid_idx_dx${dx}_mygrid2sengrid_target.nc
   
 done    

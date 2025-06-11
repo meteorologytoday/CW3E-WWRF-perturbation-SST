@@ -206,7 +206,7 @@ if __name__ == "__main__":
 
     )
 
-    regions = list(polygon_dict.keys())
+    regions = np.array(list(polygon_dict.keys()))
     #["CA", "sierra", "coastal", "city_LA"]
 
 
