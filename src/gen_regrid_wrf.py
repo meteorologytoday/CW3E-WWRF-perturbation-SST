@@ -67,8 +67,8 @@ def doJob(details, detect_phase=False):
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
         ds_regrid = xr.open_dataset(regrid_file)
-        WRF_lat_idx = ds_regrid["WRF_lat_idx"].to_numpy()
-        WRF_lon_idx = ds_regrid["WRF_lon_idx"].to_numpy()
+        WRF_lat_idx = ds_regrid["lat_idx"].to_numpy()
+        WRF_lon_idx = ds_regrid["lon_idx"].to_numpy()
 
         lat_regrid = ds_regrid["lat_regrid"].to_numpy()   
         lon_regrid = ds_regrid["lon_regrid"].to_numpy()   
@@ -118,7 +118,7 @@ def doJob(details, detect_phase=False):
         )
 
         if level is not None:
-            ds = ds.sel(pressure=level)
+            ds = ds.sel(pressure=[level,])
 
         if varname == "WND":
             da = ((ds["U"]**2 + ds["V"]**2)**0.5).rename("WND")
@@ -135,26 +135,43 @@ def doJob(details, detect_phase=False):
             elif input_style == "CW3E-WestWRF":
                 da = ds["slp"].rename("PSFC") * 1e2
 
+        elif varname == "TOmA":
+            da = (ds["SST"] - ds["T2"]).rename("TOmA")
         else:
             da = ds[varname]
         
+        has_level = "pressure" in da.coords
         
-        _data = da.to_numpy()
+        
 
+        _data = da.isel(time=0).to_numpy()
+        
         regrid_data = regrid_tools.regrid(WRF_avg_info, _data)
-        regrid_data = np.expand_dims(regrid_data, axis=0)
 
+        regrid_data = np.expand_dims(regrid_data, axis=0)  # recover time dimension
+        regrid_data = np.expand_dims(regrid_data, axis=0)  # add ens dimension
+        
         print("Making output dataset...")
+
+        output_coords = dict(
+            ens = (["ens"], [ens_id,]),
+            time = (["time"], [target_time,]),
+            lat = (["lat"], lat_regrid),
+            lon = (["lon"], lon_regrid),
+        )
+
+        if has_level:
+            output_dims = ["ens", "time", "pressure", "lat", "lon"]
+            output_coords["pressure"] = (["pressure",], da.coords["pressure"].to_numpy())
+        else:
+            output_dims = ["ens", "time", "lat", "lon"]
+        
+        
         da = xr.DataArray(
             name = varname_level,
             data = regrid_data,
-            dims = ["ens", "time", "lat", "lon"],
-            coords = dict(
-                ens = (["ens"], [ens_id,]),
-                time = (["time"], [target_time,]),
-                lat = (["lat"], lat_regrid),
-                lon = (["lon"], lon_regrid),
-            ),
+            dims = output_dims,
+            coords = output_coords,
             attrs = dict(
             )
         )

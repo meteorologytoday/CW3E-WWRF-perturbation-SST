@@ -36,7 +36,8 @@ def parseRanges(input_str):
     return numbers
 
 def parseExpblob(expblob_str):
-    
+   
+    print("Parsing : `%s`" % (str(expblob_str),)) 
     expsets = expblob_str.split("|")
 
     results = []
@@ -118,12 +119,15 @@ def loadExpblob(expblob, varname, dt, root="."):
 """
 
 def loadExpblob(expblob, varname, dt, root=".", verbose=True):
-    
-    expsets = parseExpblob(expblob)
+   
+    if isinstance(expblob, str):
+        expblob = parseExpblob(expblob)
+    else:
+        expblob = expblob
    
     ds = [] 
     ens_cnt = 0
-    for expname, group, ens_rng in expsets:
+    for expname, group, ens_rng in expblob:
 
         if verbose:
             print("Expname/group : %s/%s" % (expname, group))            

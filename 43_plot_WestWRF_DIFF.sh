@@ -4,15 +4,12 @@ source 000_setup.sh
 source 999_trapkill.sh
 
 #varnames=( SST TTL_RAIN PSFC IVT IWV )
-varnames=( SST TTL_RAIN PSFC IWV IVT )
+varnames=( SST TTL_RAIN PSFC IWV IVT TOmA )
 
-nproc=40
+nproc=20
 
 params=(
     2023-01-07T00:00:00  "exp_20230107/PAT00_AMP2.0/0-30,exp_20230107/PAT00_AMP1.0/0-30,exp_20230107/PAT00_AMP0.0/0-30,exp_20230107/PAT00_AMP-1.0/0-30" 2
-
-#    2023-01-07T00:00:00  "2023010700/gefs/62-79,exp_20230107/PAT01_AMP-1.0/0-30,exp_20230107/PAT00_AMP0.0/0-30,exp_20230107/PAT01_AMP1.0/0-30,exp_20230107/PAT01_AMP2.0/0-30,exp_20230107/PAT01_AMP4.0/0-30" 0
-    
     2023-01-07T00:00:00  "exp_20230107/PAT01_AMP-1.0/0-30,exp_20230107/PAT00_AMP0.0/0-30,exp_20230107/PAT01_AMP1.0/0-30,exp_20230107/PAT01_AMP2.0/0-30,exp_20230107/PAT01_AMP4.0/0-30" 1
 )
 
@@ -27,7 +24,7 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     
     echo ":: ${expblobs[@]}"
     
-    input_root=$gendata_dir/regrid_data
+    input_root=$gendata_dir/regrid_data/dx0.5
     output_root=$fig_dir/ens_compare
     mkdir -p $output_root
 

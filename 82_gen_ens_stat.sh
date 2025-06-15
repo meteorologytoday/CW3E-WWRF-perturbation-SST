@@ -5,11 +5,12 @@ nproc=5
 source 000_setup.sh
 source 999_trapkill.sh
     
-input_root=$regriddata_dir
+input_root=$regriddata_dir/dx0.5
 output_root=$gendata_dir/stat
 
 
 varnames="IVT,TTL_RAIN,PSFC,T2,U10,V10"
+varnames="TOmA"
 params=(
     "2023-01-07" "exp_20230107/PAT00_AMP0.0/0-30"            "20230107" "PAT00_AMP0.0"   $varnames
     "2023-01-07" "exp_20230107/PAT00_AMP-1.0/0-30"           "20230107" "PAT00_AMP-1.0"  $varnames
@@ -37,8 +38,6 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     output_prefix="${params[$(( i * $nparams + 3 ))]}"
     varnames="${params[$(( i * $nparams + 4 ))]}"
 
-    
-    
     echo ":: exp_beg_time      = $exp_beg_time"
     echo ":: expblob           = $expblob"
     echo ":: output_dir        = $output_dir"

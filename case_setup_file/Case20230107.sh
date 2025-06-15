@@ -21,6 +21,8 @@ WRF_archived_root=./data/PROCESSED_CW3E_WRF_RUNS/0.08deg
 WRF_params=(
 #    $label  "Baseline01" "BLANK"
     $label  "PAT00_AMP0.0"   "0-30"
+    $label  "PAT00_AMP1.0"   "0-30"
+    $label  "PAT00_AMP-1.0"  "0-30"
     $label  "PAT00_AMP2.0"   "0-30"
 
     $label  "PAT01_AMP-1.0"  "0-30"
@@ -30,6 +32,6 @@ WRF_params=(
 )
 
 exp_beg_time=$verification_date_beg
-wrfout_data_interval=$(( 3600 * 24 ))
+wrfout_data_interval=$(( 3600 * 6 ))
 frames_per_wrfout_file=1
 

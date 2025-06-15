@@ -13,7 +13,7 @@ for dx in 0.5 ; do
 
     mkdir -p $output_dir
 
-    output_WRF2mygrid_file=$gendata_dir/regrid_idx_dx${dx}_WRF2mygrid.nc
+    output_WRF2mygrid_file=$output_dir/regrid_idx_dx${dx}_WRF2mygrid.nc
     python3 src/gen_regrid_file.py \
         --input-file $WRF_file \
         --input-type "WRF"     \
