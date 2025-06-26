@@ -55,8 +55,17 @@ def genStat(da):
 
     return new_da
 
-
-
+def parseVarname(varname):
+    varname = varname.strip()
+    result = None
+    m = re.match(r"^(?P<varname>[a-zA-Z0-9]+)(-(?P<pressure>[0-9]+\.?[0-9]*))?$", varname)
+    if m is None:
+        raise Exception("Cannot parse %s" % (varname,))
+    else:
+        result = m.groupdict()
+        if result["pressure"] is not None:
+            result["pressure"] = float(result["pressure"])
+    return result 
 
 
 
@@ -80,8 +89,24 @@ plot_infos = {
     ), 
 
 
+    "PBLH" : dict(
+        mean = dict(
+            full = dict(levs=np.arange(500, 2001, 100), cmap="rainbow"),
+            anom = dict(levs=np.linspace(-1, 1, 21) * 500, cmap=cmocean.cm.balance),
+        ),
+        std = dict(
+            full = dict(levs=np.linspace(0, 1, 21) * 50,  cmap=cmocean.cm.rain),
+            anom = dict(levs=np.linspace(-1, 1, 11) * 5, cmap=cmocean.cm.balance),
+        ),
+
+        label = "PBLH",
+        unit = "m",
+        factor = 1.0,
+    ), 
+
+
+
     "PSFC" : dict(
-        selector = None,
         mean = dict(
             full = dict(levs=np.arange(950, 1050, 5), cmap="rainbow"),
             anom = dict(levs=np.linspace(-1, 1, 21) * 2, cmap=cmocean.cm.balance),
@@ -174,6 +199,24 @@ plot_infos = {
         cmap = cmocean.cm.balance,
     ), 
 
+    "W" : dict(
+        
+        selector = None,
+        mean = dict(
+            full = dict(levs=np.linspace(-1, 1, 11) * 10, cmap=cmocean.cm.balance, extend="both"),
+            anom = dict(levs=np.linspace(-1, 1, 11) * 5, cmap=cmocean.cm.balance),
+        ),
+        
+        std = dict(
+            full = dict(levs=np.arange(0, 850, 50), cmap=cmocean.cm.rain, markerlevs=[500.0]),
+            anom = dict(levs=np.linspace(-1, 1, 11) * 50, cmap=cmocean.cm.balance),
+        ),
+        label = "W",
+        factor=1e-2,
+        unit = "$\\mathrm{cm} / \\mathrm{s} $",
+    ), 
+
+
     "WND::850" : dict(
         selector = None,
         full = dict(levs=np.arange(0, 55, 5), cmap=cmocean.cm.rain, markerlevs=[40.0]),
@@ -220,7 +263,7 @@ def doJob(details, detect_phase=False):
 
     try:
         
-        varnames        = details["varnames"]
+        unparsed_vars   = details["unparsed_vars"]
         input_root      = Path(details["input_root"])
         expblobs       = details["expblobs"]
         ref_expblob    = details["ref_expblob"]
@@ -250,7 +293,7 @@ def doJob(details, detect_phase=False):
         output_files = {
             output_type : output_root / "-".join(full_names) / "{output_type:s}_{varname:s}_{plot_time:s}.{ext:s}".format(
                 output_type = output_type,
-                varname = ",".join(varnames),
+                varname = ",".join(unparsed_vars),
                 plot_time = plot_time.strftime("%Y-%m-%dT%H_%M_%S"),
                 ext = args.extension,
             )
@@ -283,14 +326,21 @@ def doJob(details, detect_phase=False):
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
         data = dict()
-
-        for varname in varnames:
         
+        parsed_vars = [parseVarname(s) for s in unparsed_vars]
+
+        for parsed_var in parsed_vars:
+       
+            print("Loading var: ", parsed_var)  
             tmp = []
 
+            sel_pressure = parsed_var["pressure"] is not None
+
             for expblob in expblobs:
-                da = WRF_ens_tools.loadExpblob(expblob, varname, plot_time, root=input_root)
+                da = WRF_ens_tools.loadExpblob(expblob, parsed_var["varname"], plot_time, root=input_root)
                 da = da.isel(time=0)
+                if sel_pressure:
+                    da = da.sel(pressure=parsed_var["pressure"])
                 tmp.append(da)
 
             """
@@ -307,11 +357,11 @@ def doJob(details, detect_phase=False):
             """
 
 
-            data[varname] = tmp
+            data[parsed_var["varname"]] = tmp
         
 
         ncol = len(expblobs)
-        nrow = len(varnames)
+        nrow = len(parsed_vars)
 
         lon_rng = np.array(args.lon_rng, dtype=float)
         lat_rng = np.array(args.lat_rng, dtype=float)
@@ -380,7 +430,9 @@ def doJob(details, detect_phase=False):
                 )
 
 
-                for i, varname in enumerate(varnames):
+                for i, parsed_var in enumerate(parsed_vars):
+
+                    varname = parsed_var["varname"]
 
                     plot_info = plot_infos[varname]
                     axes = ax[i, :]
@@ -417,15 +469,16 @@ def doJob(details, detect_phase=False):
                             markerlevs = testIfIn(plot_info[stat]["full"], "markerlevs", None) 
                             _data_plot = ( _da_ref_stat.sel(stat=stat).to_numpy() - offset) / factor
                            
-                            print(stat, ", ", plot_info[stat]) 
-                            print("LEVS: ", plot_info[stat]["full"]["levs"])
+                            #print(stat, ", ", plot_info[stat]) 
+                            #print("LEVS: ", plot_info[stat]["full"]["levs"])
+                            extend = testIfIn(plot_info[stat]["full"], "extend", "max")
                             mappable = _ax.contourf(
                                 lon, lat,
                                 _data_plot,
                                 plot_info[stat]["full"]["levs"],
                                 cmap=plot_info[stat]["full"]["cmap"],
                                 transform=proj,
-                                extend="max",
+                                extend=extend,
                             )
                             
                             cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
@@ -454,7 +507,16 @@ def doJob(details, detect_phase=False):
                             _da_stat = genStat(_da)
                             _da_stat_diff = _da_stat - _da_ref_stat
 
-                            mappable = _ax.contourf(lon, lat, _da_stat_diff.sel(stat=stat).to_numpy() / factor, plot_info[stat]["anom"]["levs"], cmap="bwr", transform=proj, extend="both")
+                            mappable = _ax.contourf(
+                                lon,
+                                lat,
+                                _da_stat_diff.sel(stat=stat).to_numpy() / factor,
+                                plot_info[stat]["anom"]["levs"],
+                                cmap="bwr",
+                                transform=proj,
+                                extend="both",
+                            )
+                            
                             cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
                             cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
                             cb.ax.set_ylabel("[ %s ]" % (plot_info["unit"],))
@@ -557,14 +619,16 @@ def doJob(details, detect_phase=False):
                 )
 
 
-                for i, varname in enumerate(varnames):
+                for i, parsed_var in enumerate(parsed_vars):
 
+                    varname = parsed_var["varname"]
+                    
                     plot_info = plot_infos[varname]
                     axes = ax[i, :]
                     _data = data[varname]
                     
                     _da_ref = _data[0]
-                   
+                    
                     factor = testIfIn(plot_info, "factor", 1) 
                     offset = testIfIn(plot_info, "offset", 0.0) 
 
@@ -754,7 +818,7 @@ if __name__ == "__main__":
         
         plot_rel_time = args.time_beg + i * args.time_stride 
         details = dict(
-            varnames = args.varnames,
+            unparsed_vars = args.varnames,
             input_root = args.input_root,
             expblobs = args.expblobs,
             ref_expblob = args.ref_expblob,

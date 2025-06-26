@@ -81,7 +81,19 @@ def doJob(details, detect_phase=False):
 
             ens_cnt += _ds.dims["ens"]
 
-        da = xr.merge(ds).transpose("ens", "time", "lat", "lon")[varname]
+
+        
+
+        da = xr.merge(ds)[varname]
+
+        has_pressure = "pressure" in da.dims
+
+        if has_pressure:
+            transpose_shape = ("ens", "time", "pressure", "lat", "lon")
+        else:
+            transpose_shape = ("ens", "time", "lat", "lon")
+
+        da = da.transpose(*transpose_shape)
         
         merge_data = []
         merge_data.append(da.std(dim="ens").expand_dims(dim={"stat": np.array(["std",])}, axis=1).rename(varname))

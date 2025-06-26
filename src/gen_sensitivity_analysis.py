@@ -1,6 +1,6 @@
 from multiprocessing import Pool
 import multiprocessing
-
+import time
 import traceback
 import xarray as xr
 import pandas as pd
@@ -89,29 +89,40 @@ def doJob(details, detect_phase=False):
         
         output_file.parent.mkdir(parents=True, exist_ok=True)
     
-        # Load regrid file for sensitivity 
-        sens_avg_info = regrid_tools.constructAvgMtxFromFile(sens_regrid_file)
-
+        # Load regrid file for sensitivity
+        do_sens_regrid = sens_regrid_file is not None
+        
+        if do_sens_regrid:
+            sens_avg_info = regrid_tools.constructAvgMtxFromFile(sens_regrid_file)
 
         print("Loading sens_da")
         sens_da   = WRF_ens_tools.loadExpblob(expblob, sens_varname,   sens_dt,   root=input_root).isel(time=0)
 
-
-        regridded_sens_data = regrid_tools.regrid(sens_avg_info, sens_da.to_numpy())
-
-
-        regridded_sens_da = xr.DataArray(
-            name = "regridded_sens_da",
-            data = regridded_sens_data,
-            dims = ("ens", "lat", "lon"),
-            coords = dict(
-                lat = sens_avg_info["lat_regrid"],
-                lon = sens_avg_info["lon_regrid"],
-                ens = sens_da.coords["ens"],
+        if do_sens_regrid:
+            regridded_sens_data = regrid_tools.regrid(sens_avg_info, sens_da.to_numpy())
+            print("regridded_sens_data : ", regridded_sens_data)
+            regridded_sens_da = xr.DataArray(
+                name = "regridded_sens_da",
+                data = regridded_sens_data,
+                dims = ("ens", "lat", "lon"),
+                coords = dict(
+                    lat = sens_avg_info["lat_regrid"],
+                    lon = sens_avg_info["lon_regrid"],
+                    ens = sens_da.coords["ens"],
+                )
             )
-        )
 
-        print("regridded_sens_data : ", regridded_sens_data)
+
+            ds_regridded_bnd = xr.Dataset(
+                data_vars = dict(
+                    lat_regrid_bnd = (["lat_regrid_bnd", ], sens_avg_info["lat_regrid_bnd"]),
+                    lon_regrid_bnd = (["lon_regrid_bnd", ], sens_avg_info["lon_regrid_bnd"]),
+                ),
+            )
+        else:
+            regridded_sens_da = sens_da
+ 
+
 
         print("Loading target_da")
         target_da = WRF_ens_tools.loadExpblob(expblob, target_varname, target_dt, root=input_root).isel(time=0) 
@@ -188,8 +199,16 @@ def doJob(details, detect_phase=False):
         # the mask here are used to remove nan points
         mask = np.isfinite(regridded_sens_da.isel(ens=0).transpose("lat", "lon").to_numpy().flatten())
         invalid_mask = np.isnan(regridded_sens_da.isel(ens=0).transpose("lat", "lon").to_numpy())
-
+        
         valid_pts = np.sum(mask)
+        invalid_pts = np.sum(invalid_mask)
+
+        print("Valid points: %d / %d (%.2f%%)" % (
+            valid_pts,
+            valid_pts + invalid_pts,
+            valid_pts / ( valid_pts  + invalid_pts ) * 100.0,
+        )) 
+
         reduce_mtx = matrix_helper.constructSubspaceWith(mask)
 
         # construct f and y
@@ -204,8 +223,15 @@ def doJob(details, detect_phase=False):
         print("f.shape = ", f.shape)
 
         ds_output = []
+
+        if do_sens_regrid:
+            ds_output.append(ds_regridded_bnd)
+
+
         for region in target_da.coords["region"]:
 
+
+        
             region_str = str(region.values)
             print("Doing region:", region_str)
             #print(target_da)
@@ -227,6 +253,7 @@ def doJob(details, detect_phase=False):
             fyT_full = reduce_mtx.T @ fyT
             
             # compute Green's function
+            computing_start_time = time.perf_counter()
             inverse_exists = True
             G_full = None
             try:
@@ -240,7 +267,8 @@ def doJob(details, detect_phase=False):
                 
                 print("Solving (ffT) G = fyT")
                 # G = greens function (column vectors are responses)
-                G = np.linalg.solve(ffT.copy(), fyT.copy())
+                #G = np.linalg.solve(ffT.copy(), fyT.copy())
+                G = np.linalg.pinv(ffT.copy()) @ fyT
                 #G = np.linalg.inv(ffT.copy()) @ fyT
                 
                 G_full = reduce_mtx.T * G
@@ -256,7 +284,12 @@ def doJob(details, detect_phase=False):
             if G_full is None: # no inverse
                 G_full = np.zeros((Ny, Nx))
                 G_full[:] = np.nan
-                
+            
+
+            computing_end_time = time.perf_counter()
+            computing_elapsed_time = computing_end_time - computing_start_time
+            print(f"Solving matrix takes {computing_elapsed_time} seconds.")
+ 
             """
             G_map = xr.DataArray(
                 name = "GreenFunc",
@@ -312,7 +345,7 @@ if __name__ == "__main__":
     parser.add_argument('--expblob', type=str, help='Input directories.', required=True)
     parser.add_argument('--target-varname', type=str, help='analysis beg time', required=True)
     parser.add_argument('--target-time', type=str, help='analysis beg time', required=True)
-    parser.add_argument('--sens-regrid-file', type=str, help='Sensitivity\'s regrid file', required=True)
+    parser.add_argument('--sens-regrid-file', type=str, help='Sensitivity\'s regrid file', default=None)
     parser.add_argument('--sens-varname', type=str, help='analysis beg time', required=True)
     parser.add_argument('--sens-time', type=str, help='analysis beg time', required=True)
     

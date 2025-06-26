@@ -168,12 +168,12 @@ def doJob(details, detect_phase=False):
         
         
         da = xr.DataArray(
-            name = varname_level,
-            data = regrid_data,
-            dims = output_dims,
-            coords = output_coords,
-            attrs = dict(
-            )
+                name = varname_level,
+                data = regrid_data,
+                dims = output_dims,
+                coords = output_coords,
+                attrs = dict(
+                ),
         )
         
         print("Saving output: ", output_file)

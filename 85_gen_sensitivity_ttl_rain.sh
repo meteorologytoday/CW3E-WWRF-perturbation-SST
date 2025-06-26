@@ -12,21 +12,23 @@ input_root=$regriddata_dir/dx${dx}
 output_root=$gendata_dir/correlation/dx${dx}
 
 region_mask_file=$gendata_dir/region_mask/mask.nc
-sens_regrid_file=$gendata_dir/regrid_idx/dx0.5/regrid_idx_sensdx6.0_mygrid2sengrid_ocn.nc
-#ens_regrid_file=$gendata_dir/regrid_idx/dx0.5/regrid_idx_sensdx4.5_sensdy3.0_mygrid2sengrid_ocn.nc
+#sens_regrid_file=$gendata_dir/regrid_idx/dx0.5/regrid_idx_sensdx6.0_mygrid2sengrid_ocn.nc
+sens_regrid_file=$gendata_dir/regrid_idx/dx0.5/regrid_idx_sensdx1.0_sensdy1.0_mygrid2sengrid_ocn.nc
+#sens_regrid_file=$gendata_dir/regrid_idx/dx0.5/regrid_idx_sensdx2.0_sensdy2.0_mygrid2sengrid_ocn.nc
 
 target_varnames=(
     "TTL_RAIN"
 )
 
 sens_varnames=(
-#    "Q2"
+    "IVT"
     "IWV"
 #    "TTL_RAIN"
 )
 
 params=(
-    "2023-01-09T00" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"
+#    "2023-01-09T00" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"
+#    "2023-01-09T00" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"
     "2023-01-09T00" "2023-01-12" "2023010700/gefs/0-79" "20230107_southCal" "WestWRF-gefs"
 #    "2023-01-12" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"   34.0 36.0 239 241
 
@@ -55,14 +57,15 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
             --expblob $expblob                \
             --target-varname $target_varname  \
             --target-time    $target_time     \
-            --sens-regrid-file $sens_regrid_file \
             --sens-varname   $sens_varname    \
+            --sens-regrid-file $sens_regrid_file \
             --sens-time      $sens_time       \
             --target-mask-type "mask_file"    \
             --target-mask-file $region_mask_file \
             --target-mask-file-regions "CA" "south_CA" "north_CA" "city_LA" "city_SF"    \
             --output-dir    $output_root/$output_dir          \
             --output-prefix $output_prefix    
+
 
     done
     done

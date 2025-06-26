@@ -140,8 +140,15 @@ def loadExpblob(expblob, varname, dt, root=".", verbose=True):
 
         ens_cnt += _ds.dims["ens"]
 
-    da = xr.merge(ds).transpose("ens", "time", "lat", "lon")[varname]
+    da = xr.merge(ds)[varname]
 
+    if "pressure" in da.dims:
+        transpose_shape = ("ens", "time", "pressure", "lat", "lon")
+    else:
+        transpose_shape = ("ens", "time", "lat", "lon")
+        
+        
+    da = da.transpose(*transpose_shape)
 
     return da
 

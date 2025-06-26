@@ -1,6 +1,6 @@
 #!/bin/bash
 
-nproc=1
+nproc=61
  
 source 60_verification_setup.sh
 source 999_trapkill.sh
@@ -11,7 +11,7 @@ varnames="TTL_RAIN IWV PH::200 WND::200 PH::850 WND::850 PSFC SST T2 IVT"
 #varnames="TTL_RAIN"
 
 varnames="SST TTL_RAIN IWV IVT PSFC"
-varnames="W"
+varnames="PBLH W"
 nparams=3
 
 for dx in 0.5 ; do

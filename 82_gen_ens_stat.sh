@@ -11,16 +11,19 @@ output_root=$gendata_dir/stat
 
 varnames="IVT,TTL_RAIN,PSFC,T2,U10,V10"
 varnames="TOmA"
+varnames="W"
 params=(
-    "2023-01-07" "exp_20230107/PAT00_AMP0.0/0-30"            "20230107" "PAT00_AMP0.0"   $varnames
-    "2023-01-07" "exp_20230107/PAT00_AMP-1.0/0-30"           "20230107" "PAT00_AMP-1.0"  $varnames
-    "2023-01-07" "exp_20230107/PAT00_AMP1.0/0-30"            "20230107" "PAT00_AMP1.0"   $varnames
-    "2023-01-07" "exp_20230107/PAT00_AMP2.0/0-30"            "20230107" "PAT00_AMP2.0"   $varnames
 
     "2023-01-07" "exp_20230107/PAT01_AMP2.0/0-30"           "20230107" "PAT01_AMP2.0"    $varnames
     "2023-01-07" "exp_20230107/PAT01_AMP4.0/0-30"           "20230107" "PAT01_AMP4.0"    $varnames
     "2023-01-07" "exp_20230107/PAT01_AMP1.0/0-30"            "20230107" "PAT01_AMP1.0"   $varnames
     "2023-01-07" "exp_20230107/PAT01_AMP-1.0/0-30"           "20230107" "PAT01_AMP-1.0"  $varnames
+
+
+    "2023-01-07" "exp_20230107/PAT00_AMP0.0/0-30"            "20230107" "PAT00_AMP0.0"   $varnames
+    "2023-01-07" "exp_20230107/PAT00_AMP-1.0/0-30"           "20230107" "PAT00_AMP-1.0"  $varnames
+    "2023-01-07" "exp_20230107/PAT00_AMP1.0/0-30"            "20230107" "PAT00_AMP1.0"   $varnames
+    "2023-01-07" "exp_20230107/PAT00_AMP2.0/0-30"            "20230107" "PAT00_AMP2.0"   $varnames
 
 
 #    "2023-01-07" "2023010700/gefs/0-79"                      "20230107"  "WESTWRF-GEFS"     "TTL_RAIN"

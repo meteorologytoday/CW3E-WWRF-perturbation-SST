@@ -43,17 +43,17 @@ for dx in 0.5 ; do
         --dlon $sens_dx             \
         --output $output_dir/regrid_idx_sensdx${sens_dx}_mygrid2sengrid_ocn.nc
 
-    sens_dx=4.5
-    sens_dy=3.0
-    python3 src/gen_regrid_file.py \
-        --input-file $output_WRF2mygrid_file   \
-        --input-type "regrid"       \
-        --lat-rng    20    50       \
-        --lon-rng    156  240       \
-        --dlat $sens_dy             \
-        --dlon $sens_dx             \
-        --output $output_dir/regrid_idx_sensdx${sens_dx}_sensdy${sens_dy}_mygrid2sengrid_ocn.nc
-
+    for sens_dx in 1.0 2.0 ; do
+        sens_dy=$sens_dx
+        python3 src/gen_regrid_file.py \
+            --input-file $output_WRF2mygrid_file   \
+            --input-type "regrid"       \
+            --lat-rng    0     70       \
+            --lon-rng    170  250       \
+            --dlat $sens_dy             \
+            --dlon $sens_dx             \
+            --output $output_dir/regrid_idx_sensdx${sens_dx}_sensdy${sens_dy}_mygrid2sengrid_ocn.nc
+    done
 
  
   

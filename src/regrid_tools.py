@@ -4,18 +4,22 @@ from pathlib import Path
 from scipy import sparse
 
 def constructAvgMtxFromFile(regrid_file):
+    
     ds_regrid = xr.open_dataset(regrid_file)
     lat_idx = ds_regrid["lat_idx"].to_numpy()
     lon_idx = ds_regrid["lon_idx"].to_numpy()
 
     lat_regrid = ds_regrid["lat_regrid"].to_numpy()   
     lon_regrid = ds_regrid["lon_regrid"].to_numpy()   
+    
 
     avg_info   = constructAvgMtx(lat_idx,   lon_idx,   len(lat_regrid), len(lon_regrid))
     
     avg_info.update(dict(
         lat_regrid = lat_regrid,
         lon_regrid = lon_regrid,
+        lat_regrid_bnd = ds_regrid["lat_regrid_bnd"].to_numpy() ,
+        lon_regrid_bnd = ds_regrid["lon_regrid_bnd"].to_numpy() ,
     ))
 
     return avg_info
