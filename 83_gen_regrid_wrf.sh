@@ -1,6 +1,6 @@
 #!/bin/bash
 
-nproc=61
+nproc=21
  
 source 60_verification_setup.sh
 source 999_trapkill.sh
@@ -10,8 +10,7 @@ wrfout_data_interval=$(( 3600 * 6 ))
 varnames="TTL_RAIN IWV PH::200 WND::200 PH::850 WND::850 PSFC SST T2 IVT"
 #varnames="TTL_RAIN"
 
-varnames="SST TTL_RAIN IWV IVT PSFC"
-varnames="PBLH W"
+varnames="SST TTL_RAIN IWV IVT PSFC T2 QVAPOR W U V"
 nparams=3
 
 for dx in 0.5 ; do

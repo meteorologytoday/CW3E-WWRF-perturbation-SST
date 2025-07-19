@@ -199,6 +199,24 @@ plot_infos = {
         cmap = cmocean.cm.balance,
     ), 
 
+    "QVAPOR" : dict(
+        
+        selector = None,
+        mean = dict(
+            full = dict(levs=np.linspace(0, 1, 11)[1:] * 10, cmap=cmocean.cm.ice_r, extend="max"),
+            anom = dict(levs=np.linspace(-1, 1, 11) * 1, cmap=cmocean.cm.balance),
+        ),
+        
+        std = dict(
+            full = dict(levs=np.arange(0, 850, 50), cmap=cmocean.cm.rain, markerlevs=[500.0]),
+            anom = dict(levs=np.linspace(-1, 1, 11) * 50, cmap=cmocean.cm.balance),
+        ),
+        label = "$Q_\\mathrm{vap}$",
+        factor = 1e-3,
+        unit = "$\\mathrm{g} / \\mathrm{kg} $",
+    ), 
+
+
     "W" : dict(
         
         selector = None,
@@ -262,21 +280,24 @@ def doJob(details, detect_phase=False):
     result = dict(details = details, status="UNKNOWN", need_work=False, detect_phase=detect_phase)
 
     try:
-        
+       
+        cxs_info = details["cross_section_info"] 
         unparsed_vars   = details["unparsed_vars"]
         input_root      = Path(details["input_root"])
         expblobs       = details["expblobs"]
         ref_expblob    = details["ref_expblob"]
-        plot_quantile = details["plot_quantile"]
         
         pval       = details["pval"]
-        qs         = details["quantiles"]        
         
         exp_beg_time    = pd.Timestamp(details["exp_beg_time"])
         plot_rel_time   = pd.Timedelta(hours=details["plot_rel_time"])
         
         output_root      = Path(details["output_root"]) 
-        
+       
+        if len(unparsed_vars) > 2:
+            raise Exception("Only two variables can be provided. First is shading, second is contour")
+
+ 
         plot_time = exp_beg_time + plot_rel_time
         
         expblobs = [ WRF_ens_tools.parseExpblob(expblob) for expblob in expblobs ]
@@ -286,10 +307,7 @@ def doJob(details, detect_phase=False):
             for expname, group, _ in expblob:
                 full_names.append(f"{expname:s}-{group:s}")
         
-        output_types = ["mean", "std"]
-        if plot_quantile:
-            output_types.append("quantile")
-
+        output_types = ["mean",]
         output_files = {
             output_type : output_root / "-".join(full_names) / "{output_type:s}_{varname:s}_{plot_time:s}.{ext:s}".format(
                 output_type = output_type,
@@ -299,8 +317,8 @@ def doJob(details, detect_phase=False):
             )
             for output_type in output_types
         }
-
-
+        
+        
         # Detecting
         result["output_files"] = output_files
         # First round is just to decide which files
@@ -326,9 +344,8 @@ def doJob(details, detect_phase=False):
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
         data = dict()
-        
+       
         parsed_vars = [parseVarname(s) for s in unparsed_vars]
-
         for parsed_var in parsed_vars:
        
             print("Loading var: ", parsed_var)  
@@ -341,43 +358,43 @@ def doJob(details, detect_phase=False):
                 da = da.isel(time=0)
                 if sel_pressure:
                     da = da.sel(pressure=parsed_var["pressure"])
-                tmp.append(da)
-
-            """
-            for expname, group, ens_rng in iter_obj:
                 
-                ens_ids = WRF_ens_tools.parseRanges(ens_rng)
-                print("Ensemble ids: %s => %s" % (ens_ids, ",".join(["%d" % i for i in ens_ids] ) ))
 
+                # Slice cross section
+                
+                fxd_coord = None
+                rng_coord = None
+                if cxs_info["dir"] == "meridional":
+                    fxd_coord = "lon"
+                    rng_coord = "lat"
+                    
+                elif cxs_info["dir"] == "latitudinal":
+                    fxd_coord = "lat"
+                    rng_coord = "lon"
 
-                print("Load %s - %s" % (expname, group,)) 
-                da = WRF_ens_tools.loadGroup(expname, group, ens_ids, varname, plot_time, root=input_root)[varname]
-                da = da.isel(time=0)
+                #fxd_rng = cxs_info["loc_rng"]
+                #da = da.sel(**{ fxd_coord : fxd_idx })
+                da = da.where(
+                    (da.coords[rng_coord] >= cxs_info["rng"][0])
+                    & (da.coords[rng_coord] <= cxs_info["rng"][1])
+                    & (da.coords[fxd_coord] >= cxs_info["loc_rng"][0])
+                    & (da.coords[fxd_coord] <= cxs_info["loc_rng"][1])
+                , drop=True).mean(dim=fxd_coord)
+               
+                print("da = ", da) 
+
+                
                 tmp.append(da)
-            """
 
 
             data[parsed_var["varname"]] = tmp
         
 
         ncol = len(expblobs)
-        nrow = len(parsed_vars)
-
-        lon_rng = np.array(args.lon_rng, dtype=float)
-        lat_rng = np.array(args.lat_rng, dtype=float)
-
-        plot_lon_l, plot_lon_r = lon_rng
-        plot_lat_b, plot_lat_t = lat_rng
-
-        lon_span = lon_rng[1] - lon_rng[0]
-        lat_span = lat_rng[1] - lat_rng[0]
+        nrow = 1
 
         h = 4.0
-        w_map = h * lon_span / lat_span
-        cent_lon=0.0
-
-        proj = ccrs.PlateCarree(central_longitude=cent_lon)
-        map_transform = ccrs.PlateCarree()
+        w_map = h * 1.6
 
         def plot_hatch(ax, x, y, d, threshold, hatch="."):
 
@@ -385,7 +402,7 @@ def doJob(details, detect_phase=False):
             _significant_idx =  (d < threshold ) 
             _dot[ _significant_idx                 ] = 0.75
             _dot[ np.logical_not(_significant_idx) ] = 0.25
-            cs = ax.contourf(x, y, _dot, colors='none', levels=[0, 0.5, 1], hatches=[None, hatch], transform=map_transform)
+            cs = ax.contourf(x, y, _dot, colors='none', levels=[0, 0.5, 1], hatches=[None, hatch])
 
             # Remove the contour lines for hatches 
             for _, collection in enumerate(cs.collections):
@@ -395,12 +412,11 @@ def doJob(details, detect_phase=False):
 
         for output_type in output_types:
 
-            if output_type in ["mean", "std"]:
+            if output_type in ["mean",]:
 
                 output_file = output_files[output_type]
 
                 stat = output_type
-
                 figsize, gridspec_kw = tool_fig_config.calFigParams(
                     w = w_map,
                     h = h,
@@ -414,14 +430,11 @@ def doJob(details, detect_phase=False):
                     nrow = nrow,
                 )
 
-
-
                 fig, ax = plt.subplots(
                     nrow, ncol,
                     figsize=figsize,
                     subplot_kw=dict(
                         aspect="auto",
-                        projection=proj,
                     ),
                     gridspec_kw=gridspec_kw,
                     constrained_layout=False,
@@ -429,13 +442,21 @@ def doJob(details, detect_phase=False):
                     sharex=False,
                 )
 
-
                 for i, parsed_var in enumerate(parsed_vars):
-
+                    
                     varname = parsed_var["varname"]
 
+                    plot_type = None               
+                    if i == 0 :
+                        plot_type = "contourf"
+                    elif i == 1:
+                        plot_type = "contour" 
+                    else:
+                        print("Cannot plot this variable `%s` because too many are plotted" % (varname,))
+                        continue
+
+
                     plot_info = plot_infos[varname]
-                    axes = ax[i, :]
                     _data = data[varname]
                     
                     _da_ref = _data[ref_expblob]
@@ -443,61 +464,53 @@ def doJob(details, detect_phase=False):
                     factor = testIfIn(plot_info, "factor", 1) 
                     offset = testIfIn(plot_info, "offset", 0.0) 
 
-
                     _da_ref_stat = genStat(_da_ref)
                     
                     for j in range(len(_data)):
                         
-                        _ax = axes[j]
+                        _ax = ax[0, j]
                         _da = _data[j]
 
                         plot_ref = j == ref_expblob
                         
-                        lat = _da_ref.coords["lat"]
-                        lon = _da_ref.coords["lon"] % 360
+                        x = _da_ref.coords[rng_coord]
+                        z = _da_ref.coords["pressure"]
                       
-                        # Skip the reference 
-                        #if plot_ref and da_idx == ref_expblob:
-                        #    da_idx += 1
-                         
                         if plot_ref:
-                               
-                            #print("varname = ", varname)
-                            #print(plot_info) 
-                            #print(plot_info[stat]["full"]["levs"])
-                   
-                            markerlevs = testIfIn(plot_info[stat]["full"], "markerlevs", None) 
+                            markerlevs = testIfIn(plot_info[stat]["full"], "markerlevs", None)
+
+
+
                             _data_plot = ( _da_ref_stat.sel(stat=stat).to_numpy() - offset) / factor
                            
-                            #print(stat, ", ", plot_info[stat]) 
-                            #print("LEVS: ", plot_info[stat]["full"]["levs"])
                             extend = testIfIn(plot_info[stat]["full"], "extend", "max")
-                            mappable = _ax.contourf(
-                                lon, lat,
-                                _data_plot,
-                                plot_info[stat]["full"]["levs"],
-                                cmap=plot_info[stat]["full"]["cmap"],
-                                transform=proj,
-                                extend=extend,
-                            )
-                            
-                            cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
-                            cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
-                            cb.ax.set_ylabel("[ %s ]" % (plot_info["unit"],))
 
-                            if markerlevs is not None:
-                                cs = _ax.contour(
-                                    lon, lat,
+
+                            if plot_type == "contourf":
+   
+                                mappable = _ax.contourf(
+                                    x, z,
                                     _data_plot,
-                                    markerlevs,
-                                    transform=proj,
-                                    colors="yellow",
+                                    plot_info[stat]["full"]["levs"],
+                                    cmap=plot_info[stat]["full"]["cmap"],
+                                    extend=extend,
                                 )
-             
-                            #plot_hatch(_ax, lon, lat, rel_CRPS, 0.2, hatch="..")
-                            #plot_hatch(_ax, lon, lat, -rel_CRPS, 0.2, hatch="//")
-                            
-                            #cs = _ax.contour(_ds.coords["lon"] % 360, _ds.coords["lat"], rel_CRPS, np.linspace(-1, 1, 5), transforms=proj, cmap="bwr")
+                                    
+                                cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
+                                cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
+                                cb.ax.set_ylabel("[ %s ]" % (plot_info["unit"],))
+
+                            elif plot_type == "contour":
+   
+                                cs = _ax.contour(
+                                    x, z,
+                                    _data_plot,
+                                    plot_info[stat]["full"]["levs"],
+                                    colors="black",
+                                )
+                                
+                                _ax.clabel(cs)
+                                    
                             
                             _ax.set_title("Ref %s" % (plot_info["label"],))
 
@@ -507,20 +520,37 @@ def doJob(details, detect_phase=False):
                             _da_stat = genStat(_da)
                             _da_stat_diff = _da_stat - _da_ref_stat
 
-                            mappable = _ax.contourf(
-                                lon,
-                                lat,
-                                _da_stat_diff.sel(stat=stat).to_numpy() / factor,
-                                plot_info[stat]["anom"]["levs"],
-                                cmap="bwr",
-                                transform=proj,
-                                extend="both",
-                            )
-                            
-                            cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
-                            cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
-                            cb.ax.set_ylabel("[ %s ]" % (plot_info["unit"],))
+                            #print(_da_stat_diff)
 
+                            _data_plot = _da_stat_diff.sel(stat=stat).to_numpy() / factor
+                            
+                            if plot_type == "contourf":
+                                
+                                mappable = _ax.contourf(
+                                    x,
+                                    z,
+                                    _data_plot,
+                                    plot_info[stat]["anom"]["levs"],
+                                    cmap="bwr",
+                                    extend="both",
+                                )
+                                
+                                cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
+                                cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
+                                cb.ax.set_ylabel("[ %s ]" % (plot_info["unit"],))
+
+                            elif plot_type == "contour":
+                                
+                                cs = _ax.contour(
+                                    x,
+                                    z,
+                                    _data_plot,
+                                    plot_info[stat]["anom"]["levs"],
+                                    colors="black",
+                                )
+                                
+                                _ax.clabel(cs)
+ 
                             _ax.set_title("Diff %s" % (plot_info["label"],))
  
 
@@ -543,202 +573,20 @@ def doJob(details, detect_phase=False):
                                     alternative='two-sided'
                                 )
                    
-                                plot_hatch(_ax, lon, lat, pval_test.pvalue, pval, hatch=".")
-                            
-                for __ax in ax.flatten(): 
+                                plot_hatch(_ax, x, z, pval_test.pvalue, pval, hatch=".")
+                for _ax in ax.flatten():
 
-                    __ax.set_global()
-                    #__ax.gridlines()
-                    __ax.coastlines(color='gray')
-                    __ax.set_extent([plot_lon_l, plot_lon_r, plot_lat_b, plot_lat_t], crs=map_transform)
-
-                    gl = __ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
-                                      linewidth=1, color='gray', alpha=0.5, linestyle='--')
-
-                    gl.xlabels_top   = False
-                    gl.ylabels_right = False
-
-                    #gl.xlocator = mticker.FixedLocator([120, 150, 180, -150, -120])#np.arange(-180, 181, 30))
-                    #gl.ylocator = mticker.FixedLocator([10, 20, 30, 40, 50])
-                    
-                    gl.xformatter = LONGITUDE_FORMATTER
-                    gl.yformatter = LATITUDE_FORMATTER
-                    gl.xlabel_style = {'size': 12, 'color': 'black'}
-                    gl.ylabel_style = {'size': 12, 'color': 'black'}
-
-                    """
-                    for shp_name, shp in shps.items():
-                        print("Putting geometry %s" % (shp_name,))
-                        print(shp)
-                        __ax.add_geometries(
-                            shp["geometry"], crs=map_transform, facecolor="none", edgecolor="black"
-                        )
-                    """
-
-                fig.suptitle("[pval=%.1f] Time: %s" % (
+                    _ax.invert_yaxis()
+                    _ax.grid() 
+    
+            
+                fig.suptitle("[pval=%.1f] Time: %s. Direction: %s, fixed %s: [%.2f, %.2f]" % (
                     args.pval,
                     plot_time.strftime("%Y/%m/%d %H:%M:%S"),
-                ))
-                
-                print("Saving output: ", output_file) 
-                fig.savefig(output_file, dpi=200)
-
-            if output_type == "quantile":
-                
-                output_file = output_files["quantile"]
-
-                ncol = 1 + len(qs) * (len(iter_obj)-1)
-
-                figsize, gridspec_kw = tool_fig_config.calFigParams(
-                    w = w_map,
-                    h = h,
-                    wspace = 1.5,
-                    hspace = 1.0,
-                    w_left = 1.0,
-                    w_right = 1.5,
-                    h_bottom = 1.5,
-                    h_top = 1.0,
-                    ncol = ncol,
-                    nrow = nrow,
-                )
-
-
-
-
-                fig, ax = plt.subplots(
-                    nrow, ncol,
-                    figsize=figsize,
-                    subplot_kw=dict(
-                        aspect="auto",
-                        projection=proj,
-                    ),
-                    gridspec_kw=gridspec_kw,
-                    constrained_layout=False,
-                    squeeze=False,
-                    sharex=False,
-                )
-
-
-                for i, parsed_var in enumerate(parsed_vars):
-
-                    varname = parsed_var["varname"]
-                    
-                    plot_info = plot_infos[varname]
-                    axes = ax[i, :]
-                    _data = data[varname]
-                    
-                    _da_ref = _data[0]
-                    
-                    factor = testIfIn(plot_info, "factor", 1) 
-                    offset = testIfIn(plot_info, "offset", 0.0) 
-
-
-                    _da_ref_stat = genStat(_da_ref)
-         
-                    ax_idx = 0
-                    for j, _da in enumerate(_data):
-                        
-                        plot_ref = j== 0
-                        
-                        lat = _da_ref.coords["lat"]
-                        lon = _da_ref.coords["lon"] % 360
-                        
-                        if plot_ref:
-                            _ax = axes[ax_idx] ; ax_idx+=1
-                    
-                            markerlevs = testIfIn(plot_info["full"], "markerlevs", None) 
-                            _data_plot = ( _da_ref_stat.sel(stat="mean").to_numpy() - offset) / factor
-                            mappable = _ax.contourf(
-                                lon, lat,
-                                _data_plot,
-                                plot_info["full"]["levs"],
-                                cmap=plot_info["full"]["cmap"],
-                                transform=proj,
-                                extend="max",
-                            )
-                            
-                            cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
-                            cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
-                            cb.ax.set_ylabel("[ %s ]" % (plot_info["unit"],))
-
-                            if markerlevs is not None:
-                                cs = _ax.contour(
-                                    lon, lat,
-                                    _data_plot,
-                                    markerlevs,
-                                    transform=proj,
-                                    colors="yellow",
-                                )
-             
-                            #plot_hatch(_ax, lon, lat, rel_CRPS, 0.2, hatch="..")
-                            #plot_hatch(_ax, lon, lat, -rel_CRPS, 0.2, hatch="//")
-                            
-                            #cs = _ax.contour(_ds.coords["lon"] % 360, _ds.coords["lat"], rel_CRPS, np.linspace(-1, 1, 5), transforms=proj, cmap="bwr")
-                            
-                            _ax.set_title("Ref %s" % (plot_info["label"],))
-
-                        else:
-
-                            for q in qs:
-                                
-                                _ax = axes[ax_idx] ; ax_idx+=1
-                                print("Plotting q = ", q)
-                                _da_qstat_diff = (_da - _da_ref).chunk(dict(ens=-1)).quantile(q, dim="ens")
-
-                                plotted_data = _da_qstat_diff / factor
-                                #plotted_data = _da_qstat_diff.sel(quantile=q, drop=True) / factor
-
-                                print(plotted_data)
-                                anom_contourf_info = testIfIn(plot_info, "anom_quantile", plot_info["anom"])
-                                
-                                mappable = _ax.contourf(
-                                    plotted_data.coords["lon"],
-                                    plotted_data.coords["lat"], 
-                                    plotted_data.to_numpy(), 
-                                    anom_contourf_info["levs"],
-                                    cmap=anom_contourf_info["cmap"], transform=proj, extend="both",
-                                )
-                                
-                                cax = tool_fig_config.addAxesNextToAxes(fig, _ax, "right", thickness=0.03, spacing=0.05)
-                                cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
-                                cb.ax.set_ylabel("[ %s ]" % (plot_info["unit"],))
-
-                                _ax.set_title("[q=%.2f] Diff %s" % (q, plot_info["label"],))
-                    
-                            
-                for __ax in ax.flatten(): 
-
-                    __ax.set_global()
-                    #__ax.gridlines()
-                    __ax.coastlines(color='gray')
-                    __ax.set_extent([plot_lon_l, plot_lon_r, plot_lat_b, plot_lat_t], crs=map_transform)
-
-                    gl = __ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
-                                      linewidth=1, color='gray', alpha=0.5, linestyle='--')
-
-                    gl.xlabels_top   = False
-                    gl.ylabels_right = False
-
-                    #gl.xlocator = mticker.FixedLocator([120, 150, 180, -150, -120])#np.arange(-180, 181, 30))
-                    #gl.ylocator = mticker.FixedLocator([10, 20, 30, 40, 50])
-                    
-                    gl.xformatter = LONGITUDE_FORMATTER
-                    gl.yformatter = LATITUDE_FORMATTER
-                    gl.xlabel_style = {'size': 12, 'color': 'black'}
-                    gl.ylabel_style = {'size': 12, 'color': 'black'}
-
-                    """
-                    for shp_name, shp in shps.items():
-                        print("Putting geometry %s" % (shp_name,))
-                        print(shp)
-                        __ax.add_geometries(
-                            shp["geometry"], crs=map_transform, facecolor="none", edgecolor="black"
-                        )
-                    """
-
-                fig.suptitle("[pval=%.1f] Time: %s" % (
-                    args.pval,
-                    plot_time.strftime("%Y/%m/%d %H:%M:%S"),
+                    cxs_info["dir"],
+                    fxd_coord,
+                    cxs_info["loc_rng"][0],
+                    cxs_info["loc_rng"][1],
                 ))
                 
                 print("Saving output: ", output_file) 
@@ -776,14 +624,11 @@ if __name__ == "__main__":
     parser.add_argument('--time-end',    type=int, help='Ending of time. Hours after `--exp-beg-time`', required=True)
     parser.add_argument('--time-stride', type=int, help='Each plot differ by this time interval. Hours', required=True)
     
-    parser.add_argument('--lat-rng', type=float, nargs=2, help="Latitude range for plotting", default=[-90.0, 90.0])
-    parser.add_argument('--lon-rng', type=float, nargs=2, help="Latitude range for plotting", default=[0.0, 360.0])
+    parser.add_argument('--cxs-dir', type=str, help="Latitude range for plotting", required=True, choices=["meridional", "latitudinal"])
+    parser.add_argument('--cxs-loc-rng', type=float, nargs=2, help="Range of axis along the `---cxs-dir`.", required=True)
+    parser.add_argument('--cxs-rng', type=float, nargs=2, help="Range of latitude or longitude for cross section", required=True)
     parser.add_argument('--nproc', type=int, help="Number of processors", default=1)
     parser.add_argument('--pval', type=float, help="p-value", default=0.1)
-    parser.add_argument('--quantiles', type=float, nargs="+", help="Quantiles", default=[0.25, 0.75])
-    
-    parser.add_argument('--plot-quantile', action="store_true", help="p-value")
-    
     
     args = parser.parse_args()
     
@@ -826,8 +671,11 @@ if __name__ == "__main__":
             plot_rel_time = plot_rel_time,
             output_root = args.output_root,
             pval = args.pval,
-            plot_quantile = args.plot_quantile,
-            quantiles = args.quantiles,
+            cross_section_info = dict(
+                dir = args.cxs_dir,
+                loc_rng = args.cxs_loc_rng,
+                rng = args.cxs_rng,
+            ),
         )
 
         print("[Detect] Checking hour=%d" % (plot_rel_time,))

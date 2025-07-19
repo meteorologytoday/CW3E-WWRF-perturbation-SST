@@ -21,15 +21,15 @@ target_varnames=(
 )
 
 sens_varnames=(
-    "IVT"
+#    "IVT"
     "IWV"
 #    "TTL_RAIN"
 )
 
 params=(
+    "2023-01-09T00" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"
 #    "2023-01-09T00" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"
-#    "2023-01-09T00" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"
-    "2023-01-09T00" "2023-01-12" "2023010700/gefs/0-79" "20230107_southCal" "WestWRF-gefs"
+#    "2023-01-09T00" "2023-01-12" "2023010700/gefs/0-79" "20230107_southCal" "WestWRF-gefs"
 #    "2023-01-12" "2023-01-12" "exp_20230107/PAT00_AMP0.0/0-30" "20230107_southCal" "PAT00_AMP0.0"   34.0 36.0 239 241
 
 )
@@ -65,6 +65,9 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
             --target-mask-file-regions "CA" "south_CA" "north_CA" "city_LA" "city_SF"    \
             --output-dir    $output_root/$output_dir          \
             --output-prefix $output_prefix    
+
+            #--target-mask-file-regions "CA" "south_CA" "north_CA" "city_LA" "city_SF"    \
+
 
 
     done

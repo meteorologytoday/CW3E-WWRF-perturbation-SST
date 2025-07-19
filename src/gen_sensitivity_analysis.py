@@ -100,7 +100,7 @@ def doJob(details, detect_phase=False):
 
         if do_sens_regrid:
             regridded_sens_data = regrid_tools.regrid(sens_avg_info, sens_da.to_numpy())
-            print("regridded_sens_data : ", regridded_sens_data)
+            #print("regridded_sens_data : ", regridded_sens_data)
             regridded_sens_da = xr.DataArray(
                 name = "regridded_sens_da",
                 data = regridded_sens_data,
@@ -228,95 +228,154 @@ def doJob(details, detect_phase=False):
             ds_output.append(ds_regridded_bnd)
 
 
+        rank = None
+
+        # compute forcing correlation
+        ffT = f @ f.T
+        fTf = f.T @ f
+
+        data_vars = dict(
+            ffT    = (["allpts1", "allpts2"], ffT),
+            fTf    = (["ens", "ens"], fTf),
+        )
+
+        V_full = None
+        svd = None
+        maxrank = min(*f.shape)
+            
+        computing_start_time = time.perf_counter()
+        try:
+            
+            #print("ffT.shape = ", ffT.shape)
+            #print("fyT.shape = ", fyT.shape)
+            
+            rank = np.linalg.matrix_rank(f)
+            print("Precomputed rank: %d. maxrank = %d" % (rank, maxrank, )) 
+            
+            #print("Solving (ffT) G = fyT...  ", end="")
+            # G = greens function (column vectors are responses)
+            
+            print("Doing svd on f...  ", end="")
+            
+            svd = np.linalg.svd(f.copy())
+            
+            print("Done")
+
+            
+        except Exception as e:
+            print("Error occurs when solving matrix")
+            print(str(e))
+
+        computing_end_time = time.perf_counter()
+        computing_elapsed_time = computing_end_time - computing_start_time
+        print(f"Solving matrix takes {computing_elapsed_time} seconds.")
+
+        U = svd.U
+        sigma = svd.S
+        Vh = svd.Vh
+        V  = Vh.transpose()
+
+        print("U shape = ", U.shape)
+        print("U vector lengths: ", np.sum(U**2.0, axis=0))
+ 
+        U_map = reduce_mtx.T * U[:, :maxrank]
+        U_map = U_map.transpose().reshape( (maxrank, Ny, Nx) )
+
+        data_vars["U"]         = (["mode", "lat", "lon"], U_map)
+        data_vars["SIGMA"]     = (["mode", ], svd.S[:maxrank])
+        #data_vars["U_var"]     = (["lat", "lon"], U_map.isel(mode=slice(0, rank)).std(axis=0))
+
+        print("singular values: ", sigma)
+        tol = 1e-10
+        
+        # pinv_sigma = ( \Sigma  \Sigma^T )^+  \Sigma 
+        # pinv_sigma dimension = Np x Ne 
+        pinv_sigma = np.zeros((U.shape[0], V.shape[0]), dtype=U.dtype)
+        for i, eigenvalue in enumerate(sigma):
+            if abs(eigenvalue) > tol:
+                pinv_sigma[i, i] = 1 / eigenvalue
+
+        ds_forcing = xr.Dataset(
+            data_vars = data_vars,
+            coords = dict(
+                lat = (["lat"], coords["lat"].to_numpy()),
+                lon = (["lon"], coords["lon"].to_numpy()),
+                mode = (["mode"], np.arange(maxrank)+1),
+            ),
+        )
+
+        ds_region = []
         for region in target_da.coords["region"]:
 
+            region_data_vars = dict()
 
-        
             region_str = str(region.values)
             print("Doing region:", region_str)
-            #print(target_da)
             _target_da = target_da.sel(region=region)
 
             y = _target_da.to_numpy().reshape((1, -1))
             
             # remove ensemble mean
-
             print("y.shape = ", y.shape)
             y = y - y.mean(axis=1, keepdims=True)
             
-            # compute forcing correlation
-            ffT = f @ f.T
-           
-            #print("f*f^T = ", ffT) 
             # comptue left hand side
             fyT = f @ y.T
             fyT_full = reduce_mtx.T @ fyT
-            
-            # compute Green's function
-            computing_start_time = time.perf_counter()
-            inverse_exists = True
-            G_full = None
-            try:
-                
-
-                print("ffT.shape = ", ffT.shape)
-                print("fyT.shape = ", fyT.shape)
-                
-                r = np.linalg.matrix_rank(ffT)
-                print("Precomputed rank: %d" % (r,)) 
-                
-                print("Solving (ffT) G = fyT")
-                # G = greens function (column vectors are responses)
-                #G = np.linalg.solve(ffT.copy(), fyT.copy())
-                G = np.linalg.pinv(ffT.copy()) @ fyT
-                #G = np.linalg.inv(ffT.copy()) @ fyT
-                
-                G_full = reduce_mtx.T * G
-                G_full = G_full.reshape( ( Ny, Nx ) )
-                G_full[invalid_mask] = np.nan
-                
-            except Exception as e:
-                inverse_exists = False
-                print("Error occurs when solving matrix")
-                print(str(e))
-
-            
-            if G_full is None: # no inverse
-                G_full = np.zeros((Ny, Nx))
-                G_full[:] = np.nan
-            
-
-            computing_end_time = time.perf_counter()
-            computing_elapsed_time = computing_end_time - computing_start_time
-            print(f"Solving matrix takes {computing_elapsed_time} seconds.")
  
-            """
-            G_map = xr.DataArray(
-                name = "GreenFunc",
-                data = G_full.reshape( (1, Ny, Nx ) ),
-                dims = ("region", "lat", "lon"),
-                coords = dict(
-                    region = [region, ],
-                    lat = coords["lat"],
-                    lon = coords["lon"],
-                ),
-            )
-            """
-        
-            ds_output.append(xr.Dataset(
-                data_vars = dict(
-                    GreenFunc = (["region", "lat", "lon"], G_full.reshape( (1, Ny, Nx ) )),
-                    fyT = (["region", "lat", "lon"], fyT_full.reshape( (1, Ny, Nx) )),
-                    ffT = (["region", "allpts1", "allpts2"], ffT.reshape((1, *ffT.shape))),
-                ),
+            region_data_vars["fyT"] = (["region", "lat", "lon"], fyT_full.reshape( (1, Ny, Nx) ))
+
+            # compute Green's function
+            G_wgt = pinv_sigma @ Vh @ y.T
+            GT    = U @ G_wgt
+
+            # Compute trade-off curve
+            tradeoff = np.zeros((maxrank,))
+            for r in range(maxrank):
+                
+                G_wgt_truncated = G_wgt.copy()
+                G_wgt_truncated[r:, 0] = 0.0
+                print(G_wgt_truncated.flatten())
+                GT_truncated = U @ G_wgt_truncated
+                
+                res = fyT - ffT @ GT_truncated
+                res = np.sqrt(np.sum(res**2.0))
+                
+                tradeoff[r] = res
+            
+            region_data_vars["tradeoff"] = (["region", "mode"], tradeoff.reshape( (1, maxrank) ))
+            
+            
+            # Convert it back to physical space             
+            GT_full = reduce_mtx.T * GT
+            GT_full = GT_full.reshape( ( Ny, Nx ) )
+            GT_full[invalid_mask] = np.nan
+            
+
+            G_wgt = G_wgt.flatten()[:maxrank]
+            print("G_wgt = ", G_wgt)
+
+            # Add data into output
+            region_data_vars["y"] = (["region", "ens"], y.reshape( (1, Ne ) ))
+            region_data_vars["GT"] = (["region", "lat", "lon"], GT_full.reshape( (1, Ny, Nx ) ))
+            region_data_vars["G_wgt"]     = (["region", "mode"], G_wgt.reshape((1, maxrank)))#G_wgt[0, :maxrank].reshape( (1, -1) ))
+
+ 
+            ds_region.append(xr.Dataset(
+                data_vars = region_data_vars,
                 coords = dict(
                     region = np.array([region_str, ]),
-                    lat = (["lat"], coords["lat"].to_numpy()),
-                    lon = (["lon"], coords["lon"].to_numpy()),
+                    lat = ds_forcing.coords["lat"],
+                    lon = ds_forcing.coords["lon"],
+                    mode = ds_forcing.coords["mode"],
+                    ens = np.arange(Ne),
                 ),
             ))
 
-        ds_output = xr.merge(ds_output)#.set_coords(["lat", "lon"])
+
+        ds_region = xr.merge(ds_region)
+        ds_output = xr.merge([ds_forcing, ds_region])
+        ds_output.attrs["rank"] = rank
         
         print("Result: ", ds_output)
         print("Saving output: ", output_file)
