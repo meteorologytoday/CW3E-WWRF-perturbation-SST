@@ -96,7 +96,7 @@ def doJob(details, detect_phase=False):
             sens_avg_info = regrid_tools.constructAvgMtxFromFile(sens_regrid_file)
 
         print("Loading sens_da")
-        sens_da   = WRF_ens_tools.loadExpblob(expblob, sens_varname,   sens_dt,   root=input_root).isel(time=0)
+        sens_da   = WRF_ens_tools.loadExpblob(expblob, sens_varname, sens_dt, root=input_root).isel(time=0)
 
         if do_sens_regrid:
             regridded_sens_data = regrid_tools.regrid(sens_avg_info, sens_da.to_numpy())
@@ -125,7 +125,14 @@ def doJob(details, detect_phase=False):
 
 
         print("Loading target_da")
-        target_da = WRF_ens_tools.loadExpblob(expblob, target_varname, target_dt, root=input_root).isel(time=0) 
+        target_da = WRF_ens_tools.loadExpblob(expblob, target_varname, target_dt, root=input_root).isel(time=0)
+
+        if target_varname == "TTL_RAIN":
+            print("!!!! TTL_RAIN as target. Special case: substract the sens_dt value such that TTL_RAIN begins from sens_dt")
+            target_da_at_beg = WRF_ens_tools.loadExpblob(expblob, target_varname, sens_dt, root=input_root).isel(time=0)
+
+            target_da = target_da - target_da_at_beg
+ 
         # average target_da
         if target_mask_type == "latlon_rng":
             
@@ -335,11 +342,10 @@ def doJob(details, detect_phase=False):
                 
                 G_wgt_truncated = G_wgt.copy()
                 G_wgt_truncated[r:, 0] = 0.0
-                print(G_wgt_truncated.flatten())
                 GT_truncated = U @ G_wgt_truncated
                 
                 res = fyT - ffT @ GT_truncated
-                res = np.sqrt(np.sum(res**2.0))
+                res = np.sum(res**2.0)
                 
                 tradeoff[r] = res
             
@@ -378,6 +384,7 @@ def doJob(details, detect_phase=False):
         ds_output.attrs["rank"] = rank
         
         print("Result: ", ds_output)
+        #ds_output = ds_output.compute()
         print("Saving output: ", output_file)
         ds_output.to_netcdf(output_file)
 

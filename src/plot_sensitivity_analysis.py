@@ -54,7 +54,7 @@ def doJob(details, detect_phase=False):
         output_label = details["output_label"]
         modes = details["modes"]
         regions = details["regions"]
-        last_modes = details["last_modes"]        
+        first_modes = details["first_modes"]        
         output_dir = output_root / output_label 
 
         output_types = [
@@ -80,7 +80,7 @@ def doJob(details, detect_phase=False):
             )
         
         for region in regions:
-            for output_type in ["wgt", "greenfunc", "tradeoff"]:
+            for output_type in ["wgt", "greenfunc", "tradeoff", "cov"]:
                 output_files["%s-%s" % (output_type, region)] = output_dir / "{output_type:s}-{region:s}.{ext:s}".format(
                     region = region,
                     output_type = output_type,
@@ -113,7 +113,7 @@ def doJob(details, detect_phase=False):
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
 
-        ds = xr.open_dataset(input_file)
+        ds = xr.open_dataset(input_file, engine="netcdf4")
         rank = ds.attrs["rank"] 
 
         #ds = ds.sel(region=region)
@@ -153,12 +153,13 @@ def doJob(details, detect_phase=False):
             unnormalized_tradeoff = ds["tradeoff"].sel(region=region).to_numpy()[:rank]
             normalized_tradeoff = unnormalized_tradeoff / unnormalized_tradeoff[0]
 
-            ax.plot(np.arange(rank) + 1, normalized_tradeoff, "k-", marker='o', markersize=5)
+            ax.plot(np.arange(rank), normalized_tradeoff, "k-", marker='o', markersize=5)
             fig.suptitle(output_label)
             ax.set_title("Trade-off Curve")
 
             ax.grid(True)
-            ax.set_xlabel("Mode") 
+            ax.set_xlabel("Modes kept") 
+            ax.set_ylabel("Squared Distance Normalized") 
             print("Saving output: ", output_file)
             fig.savefig(output_file, dpi=200)
 
@@ -449,6 +450,105 @@ def doJob(details, detect_phase=False):
             print("Saving output: ", output_file) 
             fig.savefig(output_file, dpi=200)
 
+
+            print("[%s] Plotting covariance - %s..." % (output_label, region))
+            output_file = output_files["cov-%s" % (region,)]
+
+            ncol = 1
+            nrow = 1
+            
+            lon_rng = np.array(args.lon_rng, dtype=float)
+            lat_rng = np.array(args.lat_rng, dtype=float)
+            
+            plot_lon_l, plot_lon_r = lon_rng
+            plot_lat_b, plot_lat_t = lat_rng
+            
+            lon_span = lon_rng[1] - lon_rng[0]
+            lat_span = lat_rng[1] - lat_rng[0]
+
+            h = 4.0
+            w_map = h * lon_span / lat_span
+
+            proj = ccrs.PlateCarree(central_longitude=180)
+            map_transform = ccrs.PlateCarree()
+
+            figsize, gridspec_kw = tool_fig_config.calFigParams(
+                w = w_map,
+                h = h,
+                wspace = 1.5,
+                hspace = 1.0,
+                w_left = 1.0,
+                w_right = 1.5,
+                h_bottom = 1.5,
+                h_top = 1.0,
+                ncol = ncol,
+                nrow = nrow,
+            )
+
+            fig, ax = plt.subplots(
+                nrow, ncol,
+                figsize=figsize,
+                subplot_kw=dict(
+                    aspect="auto",
+                    projection=proj,
+                ),
+                gridspec_kw=gridspec_kw,
+                constrained_layout=False,
+                squeeze=True,
+                sharex=False,
+            )
+
+            lat = ds.coords["lat"]
+            lon = ds.coords["lon"] % 360
+            
+            d = ds["fyT"].sel(region=region).to_numpy()
+            
+            # This is just for plotting to regulate the range
+            d /= 2 * np.nanstd(d)
+
+
+            #d[d==0] = np.nan
+            levs = np.linspace(-1, 1, 21)
+            
+            mappable = ax.contourf(
+                lon, lat,
+                d,
+                levs,
+                cmap=cmo.cm.balance,
+                transform=map_transform,
+                extend="both",
+            )
+
+            cax = tool_fig_config.addAxesNextToAxes(fig, ax, "right", thickness=0.03, spacing=0.05)
+            cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
+                        
+            for __ax in [ax,]:
+
+                __ax.set_global()
+                #__ax.gridlines()
+                __ax.coastlines(color='gray')
+                __ax.set_extent([plot_lon_l, plot_lon_r, plot_lat_b, plot_lat_t], crs=map_transform)
+
+                gl = __ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
+                                  linewidth=1, color='gray', alpha=0.5, linestyle='--')
+
+                gl.xlabels_top   = False
+                gl.ylabels_right = False
+
+                #gl.xlocator = mticker.FixedLocator([120, 150, 180, -150, -120])#np.arange(-180, 181, 30))
+                #gl.ylocator = mticker.FixedLocator([10, 20, 30, 40, 50])
+                
+                gl.xformatter = LONGITUDE_FORMATTER
+                gl.yformatter = LATITUDE_FORMATTER
+                gl.xlabel_style = {'size': 12, 'color': 'black'}
+                gl.ylabel_style = {'size': 12, 'color': 'black'}
+
+
+            fig.suptitle("%s" % (output_label,))
+            
+            print("Saving output: ", output_file) 
+            fig.savefig(output_file, dpi=200)
+
  
         # Figure : variance_map
         print("[%s] Plotting variance map..." % (output_label,))
@@ -610,7 +710,7 @@ def doJob(details, detect_phase=False):
         lat = ds.coords["lat"]
         lon = ds.coords["lon"] % 360
         
-        d = ds["U"].sel(mode=slice(rank - last_modes, rank)).std(dim="mode").to_numpy()
+        d = ds["U"].sel(mode=slice(0, first_modes)).std(dim="mode").to_numpy()
         
         # This is just for plotting to regulate the range
         d /= np.quantile(d, q=1.0)
@@ -629,7 +729,7 @@ def doJob(details, detect_phase=False):
 
         cax = tool_fig_config.addAxesNextToAxes(fig, ax, "right", thickness=0.03, spacing=0.05)
         cb = plt.colorbar(mappable, cax=cax, orientation="vertical", pad=0.00)
-                    
+        ax.set_title("Variance of the first %d modes" % (first_modes,)) 
         for __ax in [ax,]:
 
             __ax.set_global()
@@ -792,7 +892,7 @@ if __name__ == "__main__":
     parser.add_argument('--nproc', type=int, help="Number of processors", default=1)
     
     parser.add_argument('--modes', type=int, help="Number of modes to plot", default=4)
-    parser.add_argument('--last-modes', type=int, help="Number of modes to plot", default=10)
+    parser.add_argument('--first-modes', type=int, help="Number of modes to plot", default=10)
     
     
     args = parser.parse_args()
@@ -809,7 +909,7 @@ if __name__ == "__main__":
         output_root = args.output_root,
         output_label = args.output_label,
         modes = args.modes,
-        last_modes = args.last_modes,
+        first_modes = args.first_modes,
         regions = args.regions,
     )
 

@@ -10,7 +10,7 @@ wrfout_data_interval=$(( 3600 * 6 ))
 varnames="TTL_RAIN IWV PH::200 WND::200 PH::850 WND::850 PSFC SST T2 IVT"
 #varnames="TTL_RAIN"
 
-varnames="SST TTL_RAIN IWV IVT PSFC T2 QVAPOR W U V"
+varnames="TOmA" #SST TTL_RAIN IWV IVT PSFC T2 QVAPOR W U V"
 nparams=3
 
 for dx in 0.5 ; do
@@ -42,7 +42,7 @@ for (( i=0 ; i < $(( ${#WRF_params[@]} / $nparams )) ; i++ )); do
         --wrfout-suffix $wrfout_suffix                   \
         --input-style $naming_style                      \
         --ens-ids $ens_ids                               \
-        --output-time-range  0  120                      \
+        --output-time-range  0  $(( 7 * 24 ))            \
         --output-root $output_root \
         --varnames $varnames 
 

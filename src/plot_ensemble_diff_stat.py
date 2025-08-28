@@ -58,7 +58,7 @@ def genStat(da):
 def parseVarname(varname):
     varname = varname.strip()
     result = None
-    m = re.match(r"^(?P<varname>[a-zA-Z0-9]+)(-(?P<pressure>[0-9]+\.?[0-9]*))?$", varname)
+    m = re.match(r"^(?P<varname>[a-zA-Z0-9_]+)(-(?P<pressure>[0-9]+\.?[0-9]*))?$", varname)
     if m is None:
         raise Exception("Cannot parse %s" % (varname,))
     else:
@@ -204,7 +204,7 @@ plot_infos = {
         selector = None,
         mean = dict(
             full = dict(levs=np.linspace(-1, 1, 11) * 10, cmap=cmocean.cm.balance, extend="both"),
-            anom = dict(levs=np.linspace(-1, 1, 11) * 5, cmap=cmocean.cm.balance),
+            anom = dict(levs=np.linspace(-1, 1, 11) * 2, cmap=cmocean.cm.balance),
         ),
         
         std = dict(
@@ -286,7 +286,7 @@ def doJob(details, detect_phase=False):
             for expname, group, _ in expblob:
                 full_names.append(f"{expname:s}-{group:s}")
         
-        output_types = ["mean", "std"]
+        output_types = ["mean" ]#, "std"]
         if plot_quantile:
             output_types.append("quantile")
 
@@ -327,7 +327,7 @@ def doJob(details, detect_phase=False):
 
         data = dict()
         
-        parsed_vars = [parseVarname(s) for s in unparsed_vars]
+        parsed_vars = [ parseVarname(s) for s in unparsed_vars ]
 
         for parsed_var in parsed_vars:
        
@@ -363,19 +363,20 @@ def doJob(details, detect_phase=False):
         ncol = len(expblobs)
         nrow = len(parsed_vars)
 
-        lon_rng = np.array(args.lon_rng, dtype=float)
+        lon_rng = np.array(args.lon_rng, dtype=float) % 360
         lat_rng = np.array(args.lat_rng, dtype=float)
-
+        
         plot_lon_l, plot_lon_r = lon_rng
         plot_lat_b, plot_lat_t = lat_rng
-
+        
         lon_span = lon_rng[1] - lon_rng[0]
         lat_span = lat_rng[1] - lat_rng[0]
-
+ 
         h = 4.0
         w_map = h * lon_span / lat_span
-        cent_lon=0.0
-
+        cent_lon = (plot_lon_l + plot_lon_r) / 2
+        #cent_lon = 180.0
+        
         proj = ccrs.PlateCarree(central_longitude=cent_lon)
         map_transform = ccrs.PlateCarree()
 
@@ -454,7 +455,10 @@ def doJob(details, detect_phase=False):
                         plot_ref = j == ref_expblob
                         
                         lat = _da_ref.coords["lat"]
-                        lon = _da_ref.coords["lon"] % 360
+                        #lon = np.array(_da_ref.coords["lon"]) % 360
+                        lon = _da_ref.coords["lon"]
+                        #lon[lon > 180] = (lon - 360)[lon > 180]
+                        
                       
                         # Skip the reference 
                         #if plot_ref and da_idx == ref_expblob:
@@ -472,12 +476,13 @@ def doJob(details, detect_phase=False):
                             #print(stat, ", ", plot_info[stat]) 
                             #print("LEVS: ", plot_info[stat]["full"]["levs"])
                             extend = testIfIn(plot_info[stat]["full"], "extend", "max")
+                            
                             mappable = _ax.contourf(
                                 lon, lat,
                                 _data_plot,
                                 plot_info[stat]["full"]["levs"],
                                 cmap=plot_info[stat]["full"]["cmap"],
-                                transform=proj,
+                                transform=map_transform,
                                 extend=extend,
                             )
                             
@@ -493,7 +498,6 @@ def doJob(details, detect_phase=False):
                                     transform=proj,
                                     colors="yellow",
                                 )
-             
                             #plot_hatch(_ax, lon, lat, rel_CRPS, 0.2, hatch="..")
                             #plot_hatch(_ax, lon, lat, -rel_CRPS, 0.2, hatch="//")
                             
@@ -503,7 +507,6 @@ def doJob(details, detect_phase=False):
 
                         else:
 
-                            #da_idx += 1
                             _da_stat = genStat(_da)
                             _da_stat_diff = _da_stat - _da_ref_stat
 
@@ -513,7 +516,7 @@ def doJob(details, detect_phase=False):
                                 _da_stat_diff.sel(stat=stat).to_numpy() / factor,
                                 plot_info[stat]["anom"]["levs"],
                                 cmap="bwr",
-                                transform=proj,
+                                transform=map_transform,
                                 extend="both",
                             )
                             
@@ -544,15 +547,16 @@ def doJob(details, detect_phase=False):
                                 )
                    
                                 plot_hatch(_ax, lon, lat, pval_test.pvalue, pval, hatch=".")
-                            
+                
                 for __ax in ax.flatten(): 
 
-                    __ax.set_global()
+                    #__ax.set_global()
                     #__ax.gridlines()
                     __ax.coastlines(color='gray')
                     __ax.set_extent([plot_lon_l, plot_lon_r, plot_lat_b, plot_lat_t], crs=map_transform)
+                    #__ax.set_extent([160, 255, plot_lat_b, plot_lat_t], crs=map_transform)
 
-                    gl = __ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
+                    gl = __ax.gridlines(crs=map_transform, draw_labels=True,
                                       linewidth=1, color='gray', alpha=0.5, linestyle='--')
 
                     gl.xlabels_top   = False

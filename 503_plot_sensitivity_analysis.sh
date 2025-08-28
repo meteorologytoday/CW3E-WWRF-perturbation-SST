@@ -8,7 +8,8 @@ nproc=1
 output_root=$fig_dir/sensitivity_fullanalysis
  
 params=(
-    "case_IWV"  "SO3_gendata/correlation/dx0.5/20230107_southCal/sensitivity_PAT00_AMP0.0_sens-2023-01-09_00-IWV_target-2023-01-12_00-TTL_RAIN.nc" 30
+    "case_IWV_20230107"  "SO3_gendata/correlation/dx0.5/20230107_southCal/sensitivity_PAT00_AMP0.0_sens-2023-01-09_00-IWV_target-2023-01-12_00-TTL_RAIN.nc" 30
+    "case_IWV_20230112"  "SO3_gendata/correlation/dx0.5/20230112_southCal/sensitivity_CTL_sens-2023-01-12_06-IWV_target-2023-01-17_00-TTL_RAIN.nc" 30
 #    "WestWRF_IWV"  "SO3_gendata/correlation/dx0.5/20230107_southCal/sensitivity_WestWRF-gefs_sens-2023-01-09_00-IWV_target-2023-01-12_00-TTL_RAIN.nc" 30
 )
 
@@ -27,7 +28,7 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
         --output-label $casename    \
         --regions CA city_LA city_SF \
         --modes $modes \
-        --last-modes 10 \
+        --first-modes 10 \
         --lat-rng 10 70 \
         --lon-rng 180 270 &
 

@@ -5,13 +5,17 @@ source 999_trapkill.sh
 
 #varnames=( SST TTL_RAIN PSFC IVT IWV )
 #varnames=( SST TTL_RAIN PSFC IWV IVT TOmA )
-varnames=( SST IWV W-700 PBLH )
+varnames=( SST TTL_RAIN IWV IVT W-700 TOmA )
+#varnames=( W-700 )
+#varnames=( TTL_RAIN )
 
 nproc=5
+#nproc=1
 
 params=(
 #    2023-01-07T00:00:00  "exp_20230107/PAT01_AMP-1.0/0-30,exp_20230107/PAT00_AMP0.0/0-30,exp_20230107/PAT01_AMP1.0/0-30,exp_20230107/PAT01_AMP2.0/0-30,exp_20230107/PAT01_AMP4.0/0-30" 1
-    2023-01-07T00:00:00  "exp_20230107/PAT01_AMP-1.0/0-30,exp_20230107/PAT00_AMP0.0/0-30,exp_20230107/PAT01_AMP1.0/0-30" 1
+    #2023-01-07T00:00:00  "exp_20230107/PAT01_AMP-1.0/0-30,exp_20230107/PAT00_AMP0.0/0-30,exp_20230107/PAT01_AMP1.0/0-30" 1
+    2023-01-12T00:00:00  "exp_20230112/PAT00_AMP-1.0/0-30,exp_20230112/CTL/0-30,exp_20230112/PAT00_AMP1.0/0-30" 1
 #    2023-01-07T00:00:00  "exp_20230107/PAT00_AMP2.0/0-30,exp_20230107/PAT00_AMP1.0/0-30,exp_20230107/PAT00_AMP0.0/0-30,exp_20230107/PAT00_AMP-1.0/0-30" 2
 )
 
@@ -31,7 +35,7 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
     mkdir -p $output_root
 
     time_beg=$(( 0 ))
-    time_end=$(( 24 * 5 + 6 ))
+    time_end=$(( 24 * 7 + 6 ))
     time_stride=6
     python3 ./src/plot_ensemble_diff_stat.py \
         --input-root $input_root             \
@@ -43,8 +47,8 @@ for (( i=0 ; i < $(( ${#params[@]} / $nparams )) ; i++ )); do
         --time-beg $time_beg \
         --time-end $time_end \
         --time-stride $time_stride \
-        --lat-rng 10 70                      \
-        --lon-rng $(( 360 - 200 )) $(( 360 - 105 ))           \
+        --lat-rng 0 70                      \
+        --lon-rng 160 $(( 360 - 105 ))       \
         --pval 0.1 \
         --extension png                                   \
         --nproc $nproc  &
